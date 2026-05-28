@@ -115,26 +115,23 @@ export function BracketBoard({
     });
   };
 
-  // Swipe gestures on touch devices: swipe left → next round, swipe right → previous.
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
-  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    const touch = event.touches[0];
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
-  };
-  const handleTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
-    const start = touchStartRef.current;
-    touchStartRef.current = null;
-    if (!start) return;
-    const touch = event.changedTouches[0];
-    const dx = touch.clientX - start.x;
-    const dy = touch.clientY - start.y;
-    // Only treat as a horizontal swipe if it's clearly horizontal (avoid hijacking
-    // vertical scrolls) and crosses a noticeable threshold.
-    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-    const direction = dx < 0 ? 1 : -1; // swipe left → +1 (next round)
-    const currentIndex = sortedRounds.findIndex((round) => round.roundNumber === focusedRoundNumber);
-    const nextRound = sortedRounds[currentIndex + direction];
-    if (nextRound) focusRound(nextRound.roundNumber);
+  // Native horizontal scroll DRIVES the focused round (no custom swipe gesture, which
+  // used to fight native scroll and leave the bracket in a half-collapsed state).
+  // As you scroll/swipe across, the round nearest the left edge becomes focused, so
+  // the columns always collapse correctly to wherever you've scrolled.
+  const focusSyncTimer = useRef<number | null>(null);
+  const handleScroll = () => {
+    if (focusSyncTimer.current) window.clearTimeout(focusSyncTimer.current);
+    focusSyncTimer.current = window.setTimeout(() => {
+      const el = scrollRef.current;
+      if (!el) return;
+      const span = cardWidth + columnGap;
+      const index = Math.round((el.scrollLeft + 12) / span);
+      const target = sortedRounds[Math.min(Math.max(index, 0), sortedRounds.length - 1)];
+      if (target && target.roundNumber !== focusedRoundNumber) {
+        setFocusedRoundNumber(target.roundNumber);
+      }
+    }, 90);
   };
 
   const getRoundMatches = (roundNumber: number) =>
@@ -405,8 +402,7 @@ export function BracketBoard({
       <div
         ref={scrollRef}
         className="bracket-scroll"
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
+        onScroll={handleScroll}
       >
         {renderBoard()}
       </div>
