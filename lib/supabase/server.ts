@@ -9,6 +9,13 @@ export function createSupabaseServiceClient() {
   }
 
   return createClient(url, serviceRoleKey, {
-    auth: { persistSession: false }
+    auth: { persistSession: false },
+    global: {
+      // Next.js 14 patches global fetch to cache by default, which freezes
+      // Supabase query results at their first response (so newly created
+      // pools/brackets never show up). Force every DB read/write to bypass
+      // the Next.js data cache.
+      fetch: (input, init) => fetch(input, { ...init, cache: "no-store" })
+    }
   });
 }
