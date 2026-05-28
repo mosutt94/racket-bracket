@@ -120,7 +120,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
               </div>
               <div className="grid gap-2 md:min-w-[220px]">
                 <button onClick={sync} disabled={busy} className="rounded-lg bg-court-700 px-4 py-3 font-bold text-white disabled:bg-slate-300">
-                  {busy ? "Updating..." : "Apply ESPN results"}
+                  {busy ? "Syncing..." : "Sync scores from ESPN"}
                 </button>
               </div>
               {syncStatus ? (
