@@ -199,19 +199,17 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
   return (
     <AppFrame compact>
       <main className={`mx-auto max-w-none px-2 pt-1 sm:px-3 ${submitted ? "pb-2" : "pb-24"}`}>
-        <div className="mb-1 flex flex-col gap-1">
-          <div className="flex items-center justify-between gap-3">
-            <PoolNav poolId={params.poolId} compact />
-            <div className="ml-auto flex shrink-0 items-center gap-2">
-              <p className="max-w-[180px] truncate text-sm font-bold text-slate-600">Hi, {currentUser.displayName}</p>
-              <button
-                type="button"
-                onClick={signOut}
-                className="rounded-lg bg-ink px-3 py-2 text-xs font-bold text-white sm:text-sm"
-              >
-                Sign out
-              </button>
-            </div>
+        <div className="mb-1 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <PoolNav poolId={params.poolId} compact />
+          <div className="flex shrink-0 items-center justify-end gap-2">
+            <p className="max-w-[180px] truncate text-sm font-bold text-slate-600">Hi, {currentUser.displayName}</p>
+            <button
+              type="button"
+              onClick={signOut}
+              className="rounded-lg bg-ink px-3 py-2 text-xs font-bold text-white sm:text-sm"
+            >
+              Sign out
+            </button>
           </div>
         </div>
         <div className="mb-1 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
@@ -243,7 +241,7 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
             </button>
           </div>
         </div>
-        <div className="mb-2 rounded-lg border border-court-200 bg-white p-2 shadow-sm">
+        <div className="mb-2 hidden rounded-lg border border-court-200 bg-white p-2 shadow-sm lg:block">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
             {roundProgress.map(({ round, picked, total }) => (
               <div

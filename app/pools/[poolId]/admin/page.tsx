@@ -87,14 +87,14 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
 
   return (
     <AppFrame>
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
         <PoolNav poolId={activePool.id} />
-        <div className="mb-5">
-          <p className="text-sm font-bold uppercase tracking-wide text-court-700">Commissioner dashboard</p>
-          <h1 className="text-3xl font-black text-ink">{activePool.name}</h1>
+        <div className="mb-4 mt-1">
+          <p className="text-xs font-bold uppercase tracking-wide text-court-700 sm:text-sm">Commissioner dashboard</p>
+          <h1 className="text-2xl font-black text-ink sm:text-3xl">{activePool.name}</h1>
           {!isCommissioner ? <p className="mt-2 text-sm font-semibold text-clay-700">Only the commissioner can use these tools.</p> : null}
         </div>
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Metric icon={<Users />} label="Members" value={members.length} />
           <Metric icon={<Lock />} label="Submitted" value={`${submitted.length}/${members.length}`} />
           <Metric icon={<CalendarClock />} label="Draw status" value={activeInstance?.status.replace("_", " ") ?? activeTournament.status} small />
