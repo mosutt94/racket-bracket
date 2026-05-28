@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f7faf5;
+  color: #17211a;
+  overflow-x: hidden;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.bracket-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  /* Contain only horizontal overscroll (so the bracket doesn't trigger the
+     browser's back-swipe gesture). Let vertical scroll bubble up to the page. */
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
+  scrollbar-color: #a6d99f #eef5ec;
+  scrollbar-width: thin;
+}
