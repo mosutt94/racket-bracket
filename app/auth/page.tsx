@@ -3,19 +3,40 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppFrame } from "@/components/AppFrame";
-import { createDemoProfile, ensureProfile, loadState, saveCurrentUser, saveState } from "@/lib/demo-store";
+import { saveCurrentUser } from "@/lib/current-user";
 
 export default function AuthPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("demo@racketbracket.app");
-  const [displayName, setDisplayName] = useState("Demo Captain");
+  const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
-  function signIn() {
-    const profile = createDemoProfile(email, displayName);
-    const state = ensureProfile(loadState(), profile);
-    saveCurrentUser(profile);
-    saveState(state);
-    router.push("/dashboard");
+  async function signIn() {
+    if (!email.trim() || !displayName.trim()) {
+      setError("Email and display name are required.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/auth/identify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, displayName })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        setError(result.error ?? "Could not sign in.");
+        return;
+      }
+      saveCurrentUser(result.profile);
+      router.push("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not sign in.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -35,8 +56,9 @@ export default function AuthPage() {
               Display name
               <input className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
             </label>
-            <button onClick={signIn} className="w-full rounded-lg bg-court-700 px-4 py-3 font-bold text-white hover:bg-court-900">
-              Continue
+            {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</p> : null}
+            <button onClick={signIn} disabled={busy} className="w-full rounded-lg bg-court-700 px-4 py-3 font-bold text-white hover:bg-court-900 disabled:bg-slate-300">
+              {busy ? "Signing in..." : "Continue"}
             </button>
           </div>
         </div>

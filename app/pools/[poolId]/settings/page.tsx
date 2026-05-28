@@ -4,28 +4,50 @@ import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { PoolNav } from "@/components/PoolNav";
 import { loadAppState } from "@/lib/app-state-client";
-import { saveState, updateRoundPoints } from "@/lib/demo-store";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import type { AppState, TournamentRound } from "@/lib/types";
 
 export default function ScoringSettingsPage({ params }: { params: { poolId: string } }) {
   const [state, setState] = useState<AppState | null>(null);
   const [rounds, setRounds] = useState<TournamentRound[]>([]);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     loadAppState().then((loaded) => {
-    const tournament = findTournamentForPool(loaded, params.poolId);
-    setState(loaded);
-    setRounds(tournament ? loaded.rounds.filter((round) => round.tournamentId === tournament.id) : []);
+      const tournament = findTournamentForPool(loaded, params.poolId);
+      setState(loaded);
+      setRounds(tournament ? loaded.rounds.filter((round) => round.tournamentId === tournament.id) : []);
     });
   }, [params.poolId]);
 
   if (!state) return null;
+  const tournament = findTournamentForPool(state, params.poolId);
 
-  function save() {
-    const nextState = updateRoundPoints(state!, rounds);
-    saveState(nextState);
-    setState(nextState);
+  async function save() {
+    if (!tournament) return;
+    setSaveStatus("saving");
+    setErrorMessage(null);
+    try {
+      const response = await fetch("/api/admin/scoring", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tournamentId: tournament.id,
+          rounds: rounds.map((round) => ({ roundNumber: round.roundNumber, pointsPerCorrectPick: round.pointsPerCorrectPick }))
+        })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not save scoring.");
+      setSaveStatus("saved");
+      // Refresh local state so the form reflects what's in the DB.
+      const refreshed = await loadAppState();
+      setState(refreshed);
+      setRounds(refreshed.rounds.filter((round) => round.tournamentId === tournament.id));
+    } catch (error) {
+      setSaveStatus("error");
+      setErrorMessage(error instanceof Error ? error.message : "Could not save scoring.");
+    }
   }
 
   return (
@@ -41,6 +63,7 @@ export default function ScoringSettingsPage({ params }: { params: { poolId: stri
                 {round.roundName}
                 <input
                   type="number"
+                  min={0}
                   className="rounded-lg border border-slate-200 px-3 py-2"
                   value={round.pointsPerCorrectPick}
                   onChange={(event) =>
@@ -50,8 +73,13 @@ export default function ScoringSettingsPage({ params }: { params: { poolId: stri
               </label>
             ))}
           </div>
-          <button onClick={save} className="mt-6 rounded-lg bg-court-700 px-4 py-3 font-bold text-white">
-            Save scoring
+          {errorMessage ? <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{errorMessage}</p> : null}
+          <button
+            onClick={save}
+            disabled={saveStatus === "saving" || !tournament}
+            className="mt-6 rounded-lg bg-court-700 px-4 py-3 font-bold text-white disabled:bg-slate-300"
+          >
+            {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : "Save scoring"}
           </button>
         </div>
       </main>

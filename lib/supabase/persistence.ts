@@ -1,5 +1,4 @@
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
-import { getTennisDataProvider } from "@/lib/providers/provider-service";
 import { recalculateScores } from "@/lib/services/scoring-service";
 import { EspnTennisProvider } from "@/lib/providers/espn-tennis-provider";
 import type { EspnDrawImportData } from "@/lib/providers/espn-tennis-provider";
@@ -421,6 +420,65 @@ export async function createPoolByEmail(input: {
     gender: input.gender
   });
   return { ...result, profile };
+}
+
+export async function getOrCreateProfileByEmailAndAuthenticate(input: { email: string; displayName: string }) {
+  return getOrCreateProfileByEmail(getClient(), input);
+}
+
+export async function setTournamentStatusInSupabase(input: {
+  tournamentId: string;
+  status: TournamentStatus;
+}) {
+  const supabase = getClient();
+  const now = new Date().toISOString();
+
+  // Reflect status on both the per-pool tournament and the shared instance.
+  const tournamentUpdate = supabase.from("tournaments").update({ status: input.status }).eq("id", input.tournamentId);
+  const { data: tournament, error: tournamentLookupError } = await supabase
+    .from("tournaments")
+    .select("tournament_instance_id")
+    .eq("id", input.tournamentId)
+    .maybeSingle();
+  throwIfError(tournamentLookupError);
+
+  throwIfError((await tournamentUpdate).error);
+
+  // Mirror picking_open / locked onto the pool_tournaments.locked_at column.
+  if (input.status === "locked") {
+    throwIfError((await supabase.from("pool_tournaments").update({ locked_at: now }).eq("tournament_id", input.tournamentId)).error);
+  } else if (input.status === "picking_open") {
+    throwIfError((await supabase.from("pool_tournaments").update({ locked_at: null }).eq("tournament_id", input.tournamentId)).error);
+  }
+
+  if (tournament?.tournament_instance_id) {
+    const instanceStatus =
+      input.status === "completed" ? "completed" :
+      input.status === "in_progress" || input.status === "locked" ? "in_progress" :
+      "draw_ready";
+    throwIfError((await supabase.from("tournament_instances").update({ status: instanceStatus, last_synced_at: now }).eq("id", tournament.tournament_instance_id)).error);
+  }
+}
+
+export async function updateTournamentScoringInSupabase(input: {
+  tournamentId: string;
+  rounds: Array<{ roundNumber: number; pointsPerCorrectPick: number }>;
+}) {
+  const supabase = getClient();
+
+  // Update one row per round. Small enough to fire in parallel.
+  const updates = input.rounds.map((round) =>
+    supabase
+      .from("tournament_rounds")
+      .update({ points_per_correct_pick: round.pointsPerCorrectPick })
+      .eq("tournament_id", input.tournamentId)
+      .eq("round_number", round.roundNumber)
+  );
+  const results = await Promise.all(updates);
+  for (const result of results) throwIfError(result.error);
+
+  // Points changed → re-score all picks in this tournament.
+  return recalculateTournamentScoresInSupabase(input.tournamentId);
 }
 
 async function getOrCreateProfileByEmail(supabase: SupabaseClient, input: { email: string; displayName: string }) {
@@ -1056,77 +1114,6 @@ export async function recalculateTournamentScoresInSupabase(tournamentId: string
   throwIfError(bracketsError);
 
   return { bracketsScored: brackets.length, picksScored: picks.length };
-}
-
-export async function syncMockLiveUpdatesInSupabase(input: { tournamentId: string; tournamentInstanceId: string }) {
-  const supabase = getClient();
-  const state = await getAppStateFromSupabase().catch((error) => {
-    throw new Error(`load state failed: ${error instanceof Error ? error.message : "unknown error"}`);
-  });
-  const tournament = state.tournaments.find((item) => item.id === input.tournamentId);
-  if (!tournament) throw new Error("Tournament not found.");
-
-  const updates = await getTennisDataProvider("mock").getMatchUpdates(input.tournamentInstanceId).catch((error) => {
-    throw new Error(`provider updates failed: ${error instanceof Error ? error.message : "unknown error"}`);
-  });
-  const playersByExternalId = new Map(state.players.map((player) => [player.externalProviderId, player.id]));
-  const { data: overrides, error: overridesError } = await supabase
-    .from("manual_overrides")
-    .select("match_id")
-    .eq("tournament_id", input.tournamentId)
-    .eq("locked", true)
-    .in("override_type", ["match_winner", "match_score"]);
-  try {
-    throwIfError(overridesError);
-  } catch (error) {
-    throw new Error(`manual override lookup failed: ${error instanceof Error ? error.message : "unknown error"}`);
-  }
-
-  const lockedMatchIds = new Set((overrides ?? []).map((override: any) => override.match_id).filter(Boolean));
-  let matchesUpdated = 0;
-
-  for (const match of state.matches.filter((item) => item.tournamentId === input.tournamentId)) {
-    if (lockedMatchIds.has(match.id)) continue;
-    const update = updates.find((item) => providerIdsMatch(match.externalProviderMatchId, item.externalProviderMatchId));
-    if (!update) continue;
-
-    const winnerPlayerId = "winnerExternalProviderId" in update
-      ? playersByExternalId.get(update.winnerExternalProviderId) ?? match.winnerPlayerId
-      : match.winnerPlayerId;
-
-    const { error: matchError } = await supabase
-      .from("matches")
-      .update({
-        status: update.status,
-        score_summary: update.scoreSummary ?? match.scoreSummary,
-        winner_player_id: winnerPlayerId ?? null,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", match.id);
-    throwIfError(matchError);
-    matchesUpdated += 1;
-
-    if (winnerPlayerId && match.nextMatchId && match.nextMatchSlot) {
-      const nextSlotColumn = match.nextMatchSlot === "player1" ? "player1_id" : "player2_id";
-      const { error: advanceError } = await supabase.from("matches").update({ [nextSlotColumn]: winnerPlayerId }).eq("id", match.nextMatchId);
-      throwIfError(advanceError);
-    }
-  }
-
-  const now = new Date().toISOString();
-  throwIfError((await supabase.from("tournaments").update({ last_synced_at: now }).eq("id", input.tournamentId)).error);
-  throwIfError((await supabase.from("tournament_instances").update({ last_synced_at: now }).eq("id", input.tournamentInstanceId)).error);
-
-  const syncRun = await recordProviderSyncRun({
-    tournamentInstanceId: input.tournamentInstanceId,
-    tournamentId: input.tournamentId,
-    providerName: "MockTennisDataProvider",
-    syncType: "match_updates",
-    status: "success"
-  });
-  const scoring = await recalculateTournamentScoresInSupabase(input.tournamentId);
-
-  return { syncRun, matchesUpdated, scoring };
 }
 
 export async function syncEspnLiveUpdatesInSupabase(input: { tournamentId: string; tournamentInstanceId: string }) {

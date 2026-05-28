@@ -1,21 +1,27 @@
 "use client";
 
-import { getCurrentUser, loadState, saveState } from "@/lib/demo-store";
+import { getSavedCurrentUser } from "@/lib/current-user";
 import type { AppState, Profile } from "@/lib/types";
 
 export async function loadAppState(): Promise<AppState> {
-  try {
-    const response = await fetch("/api/state", { cache: "no-store" });
-    if (!response.ok) throw new Error("Could not load server state.");
-    const state = (await response.json()) as AppState;
-    saveState(state);
-    return state;
-  } catch {
-    return loadState();
+  const response = await fetch("/api/state", { cache: "no-store" });
+  if (!response.ok) {
+    const message = await response.text().catch(() => "");
+    throw new Error(`Could not load app state (${response.status}): ${message}`);
   }
+  return (await response.json()) as AppState;
 }
 
+/**
+ * Returns the signed-in profile, preferring the canonical row from server state
+ * (cross-referenced by email) so the id is always the real Supabase profile id.
+ * If the user hasn't signed in yet, returns a minimal stub — callers should
+ * generally redirect to /auth before relying on the id.
+ */
 export function getCurrentUserForState(state: AppState): Profile {
-  const stored = getCurrentUser();
+  const stored = getSavedCurrentUser();
+  if (!stored) {
+    return { id: "anonymous", email: "", displayName: "", createdAt: new Date().toISOString() };
+  }
   return state.profiles.find((profile) => profile.email === stored.email) ?? stored;
 }

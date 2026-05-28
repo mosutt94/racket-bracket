@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { initialState } from "@/lib/seed";
 import { EspnTennisProvider } from "@/lib/providers/espn-tennis-provider";
 import { getAppStateFromSupabase, isSupabaseConfigured } from "@/lib/supabase/persistence";
-import type { AppState, BracketLiveScore, ProviderEventType } from "@/lib/types";
+import type { BracketLiveScore, ProviderEventType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +12,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: "Missing tournamentId." }, { status: 400 });
   }
 
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json({ ok: false, error: "Supabase is not configured." }, { status: 500 });
+  }
+
   try {
-    const state = await loadState();
+    const state = await getAppStateFromSupabase();
     const tournament = state.tournaments.find((item) => item.id === tournamentId);
     if (!tournament) {
       return NextResponse.json({ ok: false, error: "Tournament not found." }, { status: 404 });
@@ -62,11 +65,6 @@ export async function GET(request: Request) {
       error: error instanceof Error ? error.message : "Could not load ESPN live scores."
     }, { status: 502 });
   }
-}
-
-async function loadState(): Promise<AppState> {
-  if (!isSupabaseConfigured()) return initialState;
-  return getAppStateFromSupabase();
 }
 
 function normalizeEspnMatchId(matchId: string) {

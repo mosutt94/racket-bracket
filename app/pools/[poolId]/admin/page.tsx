@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { PoolNav } from "@/components/PoolNav";
 import { getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
-import { saveState } from "@/lib/demo-store";
 import { getLeaderboard } from "@/lib/services/scoring-service";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import type { AppState, TournamentStatus } from "@/lib/types";
@@ -53,13 +52,19 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
     .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
   const lastSync = syncRuns[0];
 
-  function setTournamentStatus(status: TournamentStatus) {
-    const nextState = {
-      ...state!,
-      tournaments: state!.tournaments.map((item) => item.id === activeTournament.id ? { ...item, status } : item)
-    };
-    saveState(nextState);
-    setState(nextState);
+  async function setTournamentStatus(status: TournamentStatus) {
+    try {
+      const response = await fetch("/api/admin/tournament-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tournamentId: activeTournament.id, status })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not update status.");
+      setState(await loadAppState());
+    } catch (error) {
+      setSyncStatus({ ok: false, error: error instanceof Error ? error.message : "Could not update status." });
+    }
   }
 
   async function sync() {
@@ -76,9 +81,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
       })
     });
     setSyncStatus(await response.json());
-    const nextState = await loadAppState();
-    saveState(nextState);
-    setState(nextState);
+    setState(await loadAppState());
     setBusy(false);
   }
 

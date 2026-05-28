@@ -6,7 +6,7 @@ import { AppFrame } from "@/components/AppFrame";
 import { BracketBoard } from "@/components/BracketBoard";
 import { PoolNav } from "@/components/PoolNav";
 import { getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
-import { clearCurrentUser, saveState, updateBracketStatus } from "@/lib/demo-store";
+import { clearCurrentUser } from "@/lib/current-user";
 import { isBracketComplete, pickWinner } from "@/lib/services/bracket-service";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import type { AppState, Bracket, BracketLiveScore } from "@/lib/types";
@@ -39,7 +39,6 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
         status: "draft" as const
       };
       const nextState = serverBracket ? loaded : { ...loaded, brackets: [...loaded.brackets, nextBracket] };
-      saveState(nextState);
       setState(nextState);
       setBracket(nextBracket);
     });
@@ -104,7 +103,6 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
     changeVersion.current += 1;
     const bracketId = activeBracket.id;
     const nextState = { ...state!, bracketPicks: pickWinner({ bracketId, matchId, playerId, matches, picks: state!.bracketPicks }) };
-    saveState(nextState);
     setState(nextState);
     setSaveStatus("idle");
     setDirty(true);
@@ -129,10 +127,10 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
     const savedChangeVersion = changeVersion.current;
     saveRequestId.current = requestId;
     setSaveStatus("saving");
-    const submittedBracket = status === "submitted"
-      ? updateBracketStatus(state, activeBracket.id, "submitted").brackets.find((item) => item.id === activeBracket.id)
-      : null;
-    const targetBracket: Bracket = submittedBracket ?? activeBracket;
+    const targetBracket: Bracket =
+      status === "submitted"
+        ? { ...activeBracket, status: "submitted", submittedAt: activeBracket.submittedAt ?? new Date().toISOString() }
+        : activeBracket;
     const picks = state.bracketPicks
       .filter((pick) => pick.bracketId === activeBracket.id)
       .map((pick) => ({ matchId: pick.matchId, pickedWinnerPlayerId: pick.pickedWinnerPlayerId }));
@@ -164,7 +162,6 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
           ...(result.picks ?? state.bracketPicks.filter((pick) => pick.bracketId === activeBracket.id))
         ]
       };
-      saveState(nextState);
       setState(nextState);
       setBracket(targetBracket);
       setSaveStatus(status === "submitted" ? "submitted" : "saved");
@@ -177,9 +174,6 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
 
   async function submit() {
     if (!state || !activeBracket) return;
-    const nextState = updateBracketStatus(state, activeBracket.id, "submitted");
-    saveState(nextState);
-    setState(nextState);
     await persist("submitted");
   }
 

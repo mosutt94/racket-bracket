@@ -4,64 +4,85 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Racket Bracket** — Next.js 14 (App Router, TypeScript, Tailwind) MVP for private Grand Slam tennis bracket pools. Behaves like a March Madness pool against a 128-player Grand Slam draw (64 first-round matches, 127 total).
+**Racket Bracket** — Next.js 14 (App Router, TypeScript, Tailwind) app for private Grand Slam tennis bracket pools. Behaves like a March Madness pool against a 128-player Grand Slam draw (64 first-round matches, 127 total). Supabase-required; ESPN's community-maintained feed is the only data source.
 
-Demo invite code: `CLAY26` (seeded French Open 2026 men's pool).
+Deployed at https://racket-bracket.vercel.app (auto-deploys on push to `main`).
 
 ## Commands
 
 ```bash
-npm run dev           # next dev — runs at http://localhost:3000
-npm run build         # next build
-npm run start         # next start
-npm run lint          # next lint (eslint-config-next, core-web-vitals)
-npm run typecheck     # tsc --noEmit (strict mode)
-npm run seed:supabase # node scripts/seed-supabase.mjs — seeds Roland Friends 2026 pool
+npm run dev        # next dev — http://localhost:3000
+npm run build      # next build
+npm run start      # next start
+npm run lint       # next lint (eslint-config-next, core-web-vitals)
+npm run typecheck  # tsc --noEmit (strict mode)
 ```
 
 No test runner is configured. Path alias `@/*` resolves to repo root.
 
-## Dual-mode persistence (critical architecture)
+## Hard requirements
 
-The app runs in two interchangeable modes depending on env vars:
+- **Supabase env vars** in `.env.local` (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`). All three migrations applied (`supabase db push` or via Studio).
+- All API routes return 500 with "Supabase is not configured" if the env vars are missing — there is no demo / localStorage fallback.
 
-- **Demo mode** (no Supabase env vars): all state lives in `localStorage` via [lib/demo-store.ts](lib/demo-store.ts), seeded from [lib/seed.ts](lib/seed.ts) (`initialState`). Mutations are synchronous client-side reducers (e.g. `createPool`, `submitBracket`).
-- **Supabase mode** (`NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` set): API routes under [app/api/](app/api) delegate to [lib/supabase/persistence.ts](lib/supabase/persistence.ts), which talks to PostgreSQL via the service-role client in [lib/supabase/server.ts](lib/supabase/server.ts).
+## Architecture: shared-tournament-per-Slam
 
-The client decides at runtime via [lib/app-state-client.ts](lib/app-state-client.ts): it fetches `/api/state`, falls back to `loadState()` on failure, and mirrors the server response into `localStorage`. UI components are written against the same `AppState` shape ([lib/types.ts](lib/types.ts)) in both modes — keep that contract intact when adding fields.
+The big architectural decision (migration 003): **one tournament + 127 matches per `(slam_type, year, gender)`**, shared across any pools picking that Slam. Originally the codebase cloned the bracket per-pool; that was wasteful and was removed.
 
-The route layer is intentionally separated from bracket UI components so the next auth pass can swap demo user IDs for real Supabase session users without touching the UI.
+Implications when extending:
+- `tournaments` table has a UNIQUE constraint on `(slam_type, year, gender)`. Code paths that touch tournaments must lookup-or-create against this key, not create blindly.
+- `tournaments.pool_id` no longer exists — never reintroduce it. To find a pool's tournament, go through `pool_tournaments` (helper: `findTournamentForPool` in [lib/state-helpers.ts](lib/state-helpers.ts)).
+- `brackets` and `bracket_picks` still reference matches by id, so they keep working — picks just resolve to the shared match.
+- `tournament_rounds` (with `points_per_correct_pick`) is per-tournament, so scoring lives with the shared Slam too.
 
 ## Service layer
 
-Business logic lives in pure functions under [lib/services/](lib/services), takes `AppState` in, returns `AppState` out — no I/O. Both demo and Supabase modes call them.
+Pure functions under [lib/services/](lib/services), takes `AppState` in, returns `AppState` out — no I/O.
 
-- [bracket-service.ts](lib/services/bracket-service.ts) — bracket draft/submit/lock + pick propagation
-- [scoring-service.ts](lib/services/scoring-service.ts) — recalculates `bracketPicks.isCorrect`, `pointsAwarded`, and bracket `totalScore` from `tournament_rounds` points per round when match winners change. Called by every mutation that can change a winner.
-- [sync-service.ts](lib/services/sync-service.ts) — pulls from a `TennisDataProvider`, merges into `state.matches`, appends a `liveScoreSnapshot`, then calls `recalculateScores`.
-- [tournament-lifecycle-service.ts](lib/services/tournament-lifecycle-service.ts) — Grand Slam activation, staged draw sync, qualifier/lucky-loser resolution.
-- [espn-mapping-service.ts](lib/services/espn-mapping-service.ts) — maps ESPN payloads onto draw slots.
+- [bracket-service.ts](lib/services/bracket-service.ts) — draft/submit picks + propagation
+- [scoring-service.ts](lib/services/scoring-service.ts) — recalculates `bracketPicks.isCorrect`, `pointsAwarded`, and bracket `totalScore` from `tournament_rounds` points when winners change
+- [bracket-shell-service.ts](lib/services/bracket-shell-service.ts) — pure 128-slot / 127-match bracket-shape generator + Slam calendar defaults. Used by `createGrandSlamBracketForPool` in persistence.
+- [espn-mapping-service.ts](lib/services/espn-mapping-service.ts) — maps ESPN scoreboard payloads onto draw slots (used by the admin re-import endpoint)
 
-## Provider abstraction
+## Persistence
 
-Tennis data sources implement [`TennisDataProvider`](lib/providers/tennis-data-provider.ts) (`getTournamentDraw`, `getLiveMatches`, `getCompletedMatches`, plus lifecycle methods). Concrete providers in [lib/providers/](lib/providers): `MockTennisDataProvider` (default, drives the seeded 128-player draw), `EspnTennisProvider`, `TennisApiProvider` (RapidAPI, gated on `TENNIS_API_RAPIDAPI_KEY`). Selection is centralized in [provider-service.ts](lib/providers/provider-service.ts) — register new providers there. The real-provider live-feed route is currently preview-only (`/api/admin/live-feed`); it does not mutate the seeded bracket.
+[lib/supabase/persistence.ts](lib/supabase/persistence.ts) is the only file that writes to Postgres. Key entry points:
 
-## Schema
+- `createPool` / `createPoolByEmail` — creates pool + attaches it to the (shared) tournament. First pool for a Slam triggers `createGrandSlamBracketForPool` which builds rounds + 128 players + 128 draw_slots + 127 matches once, then calls `importEspnDrawInSupabase`. Subsequent pools just attach.
+- `getOrCreateProfileByEmailAndAuthenticate` — used by `/api/auth/identify` for sign-in
+- `importEspnDrawInSupabase` — fetches ESPN's bracket HTML, fills R1 players + match IDs. Idempotent. Parallelizes ~320 row updates via `Promise.all`.
+- `syncEspnLiveUpdatesInSupabase` — pulls ESPN scoreboard, applies winners, advances `next_match_id` chain, calls `recalculateTournamentScoresInSupabase`.
+- `setTournamentStatusInSupabase` / `updateTournamentScoringInSupabase` — commissioner controls used by the admin and settings pages.
+- `getAppStateFromSupabase` — fetches ALL rows for all 13 tables into a single `AppState`. **This is a known scaling issue** — every page load pulls every pool's data. Uses `fetchAllRows` pagination on matches + bracket_picks to get past PostgREST's 1000-row response cap. Scope down per-pool when adding new features at scale.
 
-Two migrations in [supabase/migrations/](supabase/migrations):
+## Provider
 
-1. `001_initial_schema.sql` — pools, members, tournaments, rounds, players, matches, brackets, bracket_picks, profiles.
-2. `002_live_grand_slam_lifecycle.sql` — canonical `tournament_instances`, pool activations, `draw_slots`, `provider_sync_runs`, `manual_overrides` (admin edits win over future provider syncs).
+[`EspnTennisProvider`](lib/providers/espn-tennis-provider.ts) is the only registered provider. Key methods:
 
-Apply with `supabase db push` (Supabase CLI required). After migrations run `npm run seed:supabase`.
+- `getDrawImportData({ slamType, year, gender })` — scrapes `espn.com/tennis/<slug>/bracket/...`, returns 64 round-1 matchups
+- `getDrawMatchLinks(...)` — returns all 127 match IDs across rounds 1-7 from the same HTML
+- `getPreviewMatches(...)` / `getLiveMatches` / `getCompletedMatches` — pull ATP + WTA scoreboards in parallel and dedupe
 
 ## Routes
 
-Pages under [app/](app); admin tooling lives at `app/pools/[poolId]/admin`. JSON API under [app/api/](app/api): `pools`, `join-pool`, `brackets`, `state`, `live-scores`, `admin/{matches,sync,recalculate,live-feed}`. All admin mutation routes go through [lib/supabase/persistence.ts](lib/supabase/persistence.ts) when Supabase is configured.
+Pages in [app/](app). Admin tools live at `app/pools/[poolId]/admin`. JSON API in [app/api/](app/api):
+
+- `auth/identify` — sign-in (find-or-create profile by email)
+- `pools` GET/POST, `join-pool` POST, `brackets` GET/POST, `state` GET, `live-scores` GET
+- `admin/{matches,sync,recalculate,scoring,tournament-status}` — commissioner mutations
+- `admin/live-feed/import-draw` — emergency ESPN re-import (no UI, useful when ESPN published the draw after bracket creation)
+
+## Identity
+
+No real auth yet. [lib/current-user.ts](lib/current-user.ts) stores the signed-in profile in localStorage. The `/api/auth/identify` endpoint does `getOrCreateProfileByEmail` so the localStorage profile has a real Supabase id. [`getCurrentUserForState`](lib/app-state-client.ts) cross-references by email on every state load to stay canonical.
 
 ## Conventions
 
-- Strict TypeScript; `AppState` is the single source of truth for shape. When adding a new entity, extend `AppState` in [lib/types.ts](lib/types.ts), seed it in [lib/seed.ts](lib/seed.ts), map it in both `mapXxx` helpers and `getAppStateFromSupabase` in [lib/supabase/persistence.ts](lib/supabase/persistence.ts), and add the column to the appropriate migration.
-- ID generation: `makeId(prefix)` from [lib/utils.ts](lib/utils.ts) for demo mode; Supabase generates UUIDs server-side.
-- Components import via the `@/` alias, not relative paths.
-- Demo mode must keep working — never gate UI features behind Supabase env vars; gate persistence instead.
+- Strict TypeScript. `AppState` ([lib/types.ts](lib/types.ts)) is the single source of truth for shape. When adding a new entity: extend `AppState`, add a `mapXxx` in `persistence.ts`, include it in `getAppStateFromSupabase`, and add the column in a new migration.
+- Components import via `@/` alias, not relative paths.
+- ID generation: pre-generate UUIDs client-side via [`createUuid`](lib/uuid.ts) when you need to wire up FK relationships in a single batch insert (see `insertBracketShellMatchesForTournament` — eliminates 127 sequential UPDATE round-trips).
+- When adding bulk DB ops, prefer parallel `Promise.all` over sequential `await` per row — Supabase REST handles 100s of concurrent connections fine.
+
+## Naming caveat
+
+The UI calls things "brackets" but the code/DB still uses "pool" (`Pool`, `pools` table, `poolId`, `pool_tournaments`). The internal `Bracket` type already means "one user's filled-in picks for a tournament" so a Pool→Bracket rename would collide. Open: rename `Pool` to `League`/`Group`/`Contest` so the code matches the UI without collision.

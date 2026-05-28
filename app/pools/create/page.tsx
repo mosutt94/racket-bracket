@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppFrame } from "@/components/AppFrame";
 import { getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
-import { getSavedCurrentUser, saveCurrentUser } from "@/lib/demo-store";
+import { getSavedCurrentUser, saveCurrentUser } from "@/lib/current-user";
 import type { Gender, Profile, SlamType } from "@/lib/types";
 
 const SLAM_OPTIONS: Array<{ value: SlamType; label: string }> = [

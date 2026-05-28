@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { PoolNav } from "@/components/PoolNav";
 import { getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
-import { saveState } from "@/lib/demo-store";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import type { AppState, Match, Player } from "@/lib/types";
 
@@ -56,9 +55,7 @@ export default function MatchManagementPage({ params }: { params: { poolId: stri
   const activeRound = rounds.find((round) => round.roundNumber === roundFilter);
 
   async function reloadState() {
-    const nextState = await loadAppState();
-    saveState(nextState);
-    setState(nextState);
+    setState(await loadAppState());
   }
 
   async function savePlayer(match: Match, slot: "player1" | "player2") {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Trophy } from "lucide-react";
 import { useEffect, useState } from "react";
-import { clearCurrentUser, getSavedCurrentUser } from "@/lib/demo-store";
+import { clearCurrentUser, getSavedCurrentUser } from "@/lib/current-user";
 import type { Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 

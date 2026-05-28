@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppFrame } from "@/components/AppFrame";
 import { getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
-import { getSavedCurrentUser } from "@/lib/demo-store";
+import { getSavedCurrentUser } from "@/lib/current-user";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import type { AppState, Profile } from "@/lib/types";
 

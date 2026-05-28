@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Mail, UserRound } from "lucide-react";
 import { AppFrame } from "@/components/AppFrame";
-import { saveCurrentUser } from "@/lib/demo-store";
+import { saveCurrentUser } from "@/lib/current-user";
 import type { Pool, Profile } from "@/lib/types";
 
 export default function InviteJoinPage({ params }: { params: { inviteCode: string } }) {

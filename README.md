@@ -1,34 +1,20 @@
 # Racket Bracket
 
-Racket Bracket is a production-oriented Next.js MVP for private Grand Slam tennis bracket pools. It behaves like a March Madness pool, but uses tennis tournament rounds, configurable scoring, pool invite codes, commissioner tools, mock live results, and a provider layer ready for a real tennis API.
+Private Grand Slam tennis bracket pools — a March Madness-style pool against a 128-player Grand Slam draw (64 first-round matches, 127 total). Built on Next.js 14 (App Router) with Supabase for persistence and ESPN's tennis feed for live data.
 
-## Run locally
+## Quick start
 
 ```bash
 npm install
+# Add Supabase env vars to .env.local (see "Configuration" below), then:
 npm run dev
 ```
 
-Open `http://localhost:3000`. The app runs immediately with local demo data. Use invite code `CLAY26` for the seeded French Open 2026 men's pool. The mock draw uses the real Grand Slam shape: 128 players, 64 first-round matches, and 127 total matches.
+Open http://localhost:3000. Sign in with any email + name; the app creates your profile in Supabase on the fly.
 
-## What is included
+## Configuration
 
-- Next.js App Router, TypeScript, React, Tailwind CSS
-- Mobile-friendly landing, auth, dashboard, pool, bracket, my bracket, leaderboard, admin, match management, and scoring settings pages
-- Local demo auth/store so the MVP works before Supabase credentials exist
-- Supabase client helpers and server persistence adapters in `lib/supabase`
-- PostgreSQL migration in `supabase/migrations/001_initial_schema.sql`
-- Seed/mock 128-player Grand Slam draw in `lib/seed.ts`
-- Business logic split into services:
-  - `lib/services/bracket-service.ts`
-  - `lib/services/scoring-service.ts`
-  - `lib/services/sync-service.ts`
-  - `lib/services/tournament-lifecycle-service.ts`
-  - `lib/providers/*`
-
-## Supabase setup
-
-Add environment variables:
+Required env vars in `.env.local`:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=...
@@ -36,93 +22,50 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
-Run both migrations:
+Supabase is the only persistence layer — the app refuses to boot without these.
+
+## Database
+
+Three migrations in `supabase/migrations/`:
+
+1. `001_initial_schema.sql` — base schema (pools, brackets, matches, players, etc.)
+2. `002_live_grand_slam_lifecycle.sql` — `tournament_instances`, `pool_tournaments`, `draw_slots`, `provider_sync_runs`, `manual_overrides`
+3. `003_shared_tournament_per_slam.sql` — drops the per-pool clone model; enforces one tournament row per (slam_type, year, gender)
+
+Apply with the Supabase CLI:
 
 ```bash
 supabase db push
 ```
 
-`002_live_grand_slam_lifecycle.sql` adds canonical tournament instances, pool activations, draw slots, provider sync runs, and manual overrides.
+Or paste each migration into the Supabase SQL editor.
 
-Then seed a working demo pool and 128-player mock Grand Slam draw:
+## How a commissioner uses it
 
-```bash
-npm run seed:supabase
-```
+1. Sign in at `/auth`
+2. **Create a bracket** at `/pools/create` — pick the Grand Slam, year, and draw (men's/women's). The app calls ESPN to import the published 128-player draw on the spot.
+3. Share the invite link (shown on the bracket's dashboard) with friends. They sign in with their own email and submit picks.
+4. As matches complete, click **Apply ESPN results** in the admin page to pull winners, advance the bracket, and award points.
+5. Leaderboard updates automatically as results come in.
 
-The seed creates `Roland Friends 2026` with invite code `CLAY26`, three demo profiles, French Open 2026 men's singles, 128 players, and 127 matches.
+If ESPN hadn't published the draw at creation time, the bracket exists but is empty until you trigger a re-import (currently via `POST /api/admin/live-feed/import-draw` — no UI yet).
 
-The app still boots with local demo data when Supabase variables are absent. When `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are present, these API routes use PostgreSQL-backed persistence:
+## Data source
 
-- `GET/POST /api/pools` for listing and creating pools
-- `POST /api/join-pool` for invite-code membership
-- `GET/POST /api/brackets` for bracket drafts, submissions, and picks
-- `POST /api/admin/matches` for commissioner match corrections and manual override audit records
-- `POST /api/admin/sync` for provider sync run logging
+[`EspnTennisProvider`](lib/providers/espn-tennis-provider.ts) is the only tennis data provider. It scrapes ESPN's public scoreboard + bracket pages for the four Grand Slams (configs hard-coded for Australian Open, French Open, Wimbledon, US Open). The feed is community-maintained on the ESPN side, treat it as experimental.
 
-The route layer is intentionally separated in `lib/supabase/persistence.ts` so the next auth pass can swap demo user IDs for real Supabase session users without touching bracket UI components.
-
-## Scoring rules
-
-Round scoring lives in `tournament_rounds` and is edited in the app at `/pools/[poolId]/settings`. The scoring algorithm lives in `lib/services/scoring-service.ts`. It recalculates bracket picks when match winners change and updates bracket totals.
-
-## Tennis data providers
-
-The provider interface is `lib/providers/tennis-data-provider.ts`:
-
-```ts
-interface TennisDataProvider {
-  getTournamentDraw(tournamentConfig): Promise<DrawData>;
-  getLiveMatches(tournamentId): Promise<LiveMatchData[]>;
-  getCompletedMatches(tournamentId): Promise<CompletedMatchData[]>;
-}
-```
-
-The current scoring implementation uses `MockTennisDataProvider`. It simulates upcoming Slam detection, partial draws with qualifier/lucky-loser placeholders, placeholder resolution, match updates, and provider health.
-
-There is also a real-provider adapter at `lib/providers/tennis-api-provider.ts` for Tennis API on RapidAPI. It is currently used as a commissioner-facing preview so you can confirm that Roland Garros fixtures/results are reachable before importing a real draw into a pool.
-
-To test the real provider, add:
+## Scripts
 
 ```bash
-TENNIS_API_RAPIDAPI_KEY=...
+npm run dev        # local dev server (http://localhost:3000)
+npm run build      # production build
+npm run start      # serve production build
+npm run lint       # eslint
+npm run typecheck  # tsc --noEmit
 ```
 
-Then open the commissioner dashboard and click **Check real feed**. The app calls `/api/admin/live-feed`, discovers the Grand Slam season from the Tennis API tournament calendar, and previews fixture/result counts plus sample matches. It intentionally does not mutate the seeded bracket yet, because real live data must be matched to a real imported draw before scoring should trust it.
+No test runner is configured.
 
-To plug in a free or paid provider:
+## Deployment
 
-1. Create a provider class implementing `TennisDataProvider`.
-2. Implement upcoming Slam discovery, tournament instance lookup, staged draw sync, match updates, and provider health.
-3. Register it in `lib/providers/provider-service.ts`.
-4. Store provider config in `tennis_data_providers`.
-5. Have the sync route call the registered provider and persist sync runs in `provider_sync_runs`.
-
-Free APIs should be evaluated for Grand Slam draw completeness, stable match IDs, qualifier placeholders, and result latency before relying on them. If a free provider is incomplete, keep it behind the provider interface and use a paid/trial provider. A commissioner-facing import flow can be added as an outage fallback, but the normal admin path should remain bracket-based editing rather than raw JSON.
-
-## Commissioner/admin features
-
-Commissioner tools live under `app/pools/[poolId]/admin`:
-
-- Submission tracker
-- Leaderboard and member score visibility
-- Lock/unlock picking
-- Manual match winner updates
-- Mock live sync button
-- Sync snapshot status
-- Scoring settings before tournament start
-- Next Grand Slam activation
-- Staged draw/results sync
-- Qualifier/lucky-loser resolution status
-- Bracket-based player and winner corrections
-- Manual override audit records where admin edits win over future provider syncs
-
-## Development phases
-
-Phase 1 through Phase 5 are represented in the codebase as an MVP path:
-
-1. App, auth placeholder, schema, seed data, pool create/join, fake 128-player tournament bracket
-2. Bracket picks, draft save, submission, lock behavior
-3. Manual match winners, scoring, leaderboard
-4. Mock live provider, sync button, live score snapshots
-5. Provider interface and docs for real tennis API integration
+The project is deployed on Vercel — every push to `main` auto-deploys to https://racket-bracket.vercel.app. Env vars are mirrored from `.env.local` into the Vercel project settings.
