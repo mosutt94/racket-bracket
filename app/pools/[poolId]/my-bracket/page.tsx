@@ -224,22 +224,6 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
             </div>
             <h1 className="truncate text-lg font-black text-ink sm:text-xl">{tournament.name}</h1>
           </div>
-          <div className="flex shrink-0 gap-2">
-            <button
-              onClick={() => persist("draft")}
-              disabled={!canSaveDraft}
-              className="inline-flex items-center gap-2 rounded-lg border border-court-200 bg-white px-3 py-2 text-sm font-bold text-court-800 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
-            >
-              <SaveButtonIcon size={18} /> {saveLabel}
-            </button>
-            <button
-              onClick={submit}
-              disabled={!complete || locked}
-              className="inline-flex items-center gap-2 rounded-lg bg-court-700 px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              {submitLabel}
-            </button>
-          </div>
         </div>
         <div className="mb-2 hidden rounded-lg border border-court-200 bg-white p-2 shadow-sm lg:block">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
@@ -301,6 +285,13 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
                   {complete ? "Review your champion, then submit." : `${pickedCount} of ${matches.length} picks made`}
                 </p>
               </div>
+              <button
+                onClick={() => persist("draft")}
+                disabled={!canSaveDraft}
+                className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-court-200 bg-white px-4 py-3 text-sm font-bold text-court-800 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+              >
+                <SaveButtonIcon size={18} /> {saveLabel}
+              </button>
               <button
                 onClick={submit}
                 disabled={!complete || locked}
