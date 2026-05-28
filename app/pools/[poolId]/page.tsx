@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
 import { getLeaderboard } from "@/lib/services/scoring-service";
 import { findTournamentForPool } from "@/lib/state-helpers";
+import { useAutoSync } from "@/lib/use-auto-sync";
 import type { AppState } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
 
@@ -21,10 +22,14 @@ export default function PoolHomePage({ params }: { params: { poolId: string } })
     setOrigin(window.location.origin);
     loadAppState().then(setState);
   }, []);
-  if (!state) return null;
 
+  const tournament = state ? findTournamentForPool(state, params.poolId) : undefined;
+  useAutoSync(tournament, {
+    onSynced: async () => setState(await loadAppState())
+  });
+
+  if (!state) return null;
   const pool = state.pools.find((item) => item.id === params.poolId);
-  const tournament = findTournamentForPool(state, params.poolId);
   if (!pool || !tournament) return <AppFrame><main className="p-8">Bracket not found.</main></AppFrame>;
 
   const leaderboard = getLeaderboard(state, pool.id, tournament.id);

@@ -9,6 +9,7 @@ import { getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
 import { clearCurrentUser } from "@/lib/current-user";
 import { isBracketComplete, pickWinner } from "@/lib/services/bracket-service";
 import { findTournamentForPool } from "@/lib/state-helpers";
+import { useAutoSync } from "@/lib/use-auto-sync";
 import type { AppState, Bracket, BracketLiveScore } from "@/lib/types";
 import { createUuid } from "@/lib/uuid";
 
@@ -45,6 +46,12 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
   }, [params.poolId]);
 
   const tournament = state ? findTournamentForPool(state, params.poolId) : undefined;
+  useAutoSync(tournament, {
+    onSynced: async () => {
+      const fresh = await loadAppState();
+      setState(fresh);
+    }
+  });
   const matches = useMemo(() => state && tournament ? state.matches.filter((match) => match.tournamentId === tournament.id) : [], [state, tournament]);
   const rounds = useMemo(() => state && tournament ? state.rounds.filter((round) => round.tournamentId === tournament.id) : [], [state, tournament]);
   const activeBracket = state && bracket ? state.brackets.find((item) => item.id === bracket.id) ?? bracket : null;

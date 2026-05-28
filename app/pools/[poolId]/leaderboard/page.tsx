@@ -6,6 +6,7 @@ import { PoolNav } from "@/components/PoolNav";
 import { getLeaderboard } from "@/lib/services/scoring-service";
 import { loadAppState } from "@/lib/app-state-client";
 import { findTournamentForPool } from "@/lib/state-helpers";
+import { useAutoSync } from "@/lib/use-auto-sync";
 import type { AppState } from "@/lib/types";
 
 export default function LeaderboardPage({ params }: { params: { poolId: string } }) {
@@ -13,9 +14,12 @@ export default function LeaderboardPage({ params }: { params: { poolId: string }
   useEffect(() => {
     loadAppState().then(setState);
   }, []);
-  if (!state) return null;
+  const tournament = state ? findTournamentForPool(state, params.poolId) : undefined;
+  useAutoSync(tournament, {
+    onSynced: async () => setState(await loadAppState())
+  });
 
-  const tournament = findTournamentForPool(state, params.poolId);
+  if (!state) return null;
   if (!tournament) return null;
   const leaderboard = getLeaderboard(state, params.poolId, tournament.id);
 

@@ -6,13 +6,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Live sync requires Supabase." }, { status: 400 });
   }
 
-  const { tournamentId, tournamentInstanceId, syncType = "manual" } = await request.json();
+  const { tournamentId, tournamentInstanceId, syncType = "manual", ifStaleMinutes } = await request.json();
   if (!tournamentId || !tournamentInstanceId) {
     return NextResponse.json({ ok: false, error: "tournamentId and tournamentInstanceId are required." }, { status: 400 });
   }
 
   try {
-    const result = await syncEspnLiveUpdatesInSupabase({ tournamentId, tournamentInstanceId });
+    const result = await syncEspnLiveUpdatesInSupabase({
+      tournamentId,
+      tournamentInstanceId,
+      ifStaleMinutes: typeof ifStaleMinutes === "number" ? ifStaleMinutes : undefined
+    });
     return NextResponse.json({ ok: true, providerName: "espn", syncType, ...result });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Could not record sync." }, { status: 500 });

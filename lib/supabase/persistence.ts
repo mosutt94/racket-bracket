@@ -1116,8 +1116,29 @@ export async function recalculateTournamentScoresInSupabase(tournamentId: string
   return { bracketsScored: brackets.length, picksScored: picks.length };
 }
 
-export async function syncEspnLiveUpdatesInSupabase(input: { tournamentId: string; tournamentInstanceId: string }) {
+export async function syncEspnLiveUpdatesInSupabase(input: {
+  tournamentId: string;
+  tournamentInstanceId: string;
+  ifStaleMinutes?: number;
+}) {
   const supabase = getClient();
+
+  // Bail early if a recent sync already covered us. This is what lets us safely
+  // call sync from every page load — first request wins, others no-op cheaply.
+  if (typeof input.ifStaleMinutes === "number" && input.ifStaleMinutes > 0) {
+    const { data: instance, error: instanceLookupError } = await supabase
+      .from("tournament_instances")
+      .select("last_synced_at")
+      .eq("id", input.tournamentInstanceId)
+      .maybeSingle();
+    throwIfError(instanceLookupError);
+    const lastSyncedAt = instance?.last_synced_at ? new Date(instance.last_synced_at).getTime() : 0;
+    const ageMinutes = (Date.now() - lastSyncedAt) / 60_000;
+    if (ageMinutes < input.ifStaleMinutes) {
+      return { skipped: true as const, reason: "fresh", lastSyncedAt: instance?.last_synced_at ?? null, ageMinutes };
+    }
+  }
+
   const state = await getAppStateFromSupabase();
   const tournament = state.tournaments.find((item) => item.id === input.tournamentId);
   if (!tournament) throw new Error("Tournament not found.");
