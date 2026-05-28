@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, CircleDot, LocateFixed, Trophy } from "lucide-react";
+import { Check, CircleDot, LocateFixed, Trophy, X } from "lucide-react";
 import { getProjectedMatchPlayers } from "@/lib/services/bracket-service";
 import { countryCodeToFlagEmoji } from "@/lib/country-flags";
 import type { BracketLiveScore, BracketPick, Match, Player, ProviderMatchStatus, TournamentRound } from "@/lib/types";
@@ -250,37 +250,75 @@ export function BracketBoard({
           {playerIds.map((playerId, index) => {
             const player = playerId ? playerById.get(playerId) : null;
             const isPicked = selected?.pickedWinnerPlayerId === playerId;
-            const isWinner = displaysRealMatch && Boolean(playerId) && match.winnerPlayerId === playerId;
+            const hasResult = displaysRealMatch && Boolean(match.winnerPlayerId);
+            const isWinner = hasResult && Boolean(playerId) && match.winnerPlayerId === playerId;
+            const isLoser = hasResult && Boolean(player) && !isWinner;
             const disabled = !player || locked || mode !== "picking";
             const flag = countryCodeToFlagEmoji(player?.country);
+            // Your pick is marked by the left accent bar + PICK tag; its color is the
+            // ONLY thing encoding correctness (gray = pending, green = right, red =
+            // wrong). The actual winner is the gold trophy; the beaten player dims.
+            const pickState: "none" | "pending" | "correct" | "wrong" = !isPicked
+              ? "none"
+              : !hasResult
+                ? "pending"
+                : isWinner
+                  ? "correct"
+                  : "wrong";
             return (
               <button
                 key={`${match.id}-${index}`}
                 disabled={disabled}
                 onClick={() => playerId && onPick?.(match.id, playerId)}
                 className={cn(
-                  "flex w-full flex-1 items-center justify-between gap-2 rounded px-2 text-left text-[13px] leading-none transition",
-                  isPicked && !isWinner && "bg-court-50 text-court-900",
-                  !isPicked && !isWinner && "bg-white text-ink",
-                  isWinner && "bg-[#1a4d3a] text-white",
-                  !disabled && !isWinner && "hover:bg-court-50"
+                  "flex w-full flex-1 items-center justify-between gap-2 rounded border-l-4 border-transparent px-2 text-left text-[13px] leading-none transition",
+                  pickState === "pending" && "border-slate-300 bg-slate-50",
+                  pickState === "correct" && "border-court-500 bg-court-50",
+                  pickState === "wrong" && "border-clay-500 bg-clay-50",
+                  isLoser && !isPicked && "opacity-60",
+                  !disabled && "hover:bg-slate-50"
                 )}
               >
                 <span className="flex min-w-0 items-center gap-2 leading-none">
                   {flag ? (
                     <span className="shrink-0 text-base leading-none" aria-label={player?.country ?? undefined}>{flag}</span>
                   ) : player?.country ? (
-                    <span className={cn("shrink-0 rounded-sm px-1 py-0.5 text-[9px] font-black uppercase tracking-wider", isWinner ? "bg-white/20 text-white/90" : "bg-slate-100 text-slate-500")}>
+                    <span className="shrink-0 rounded-sm bg-slate-100 px-1 py-0.5 text-[9px] font-black uppercase tracking-wider text-slate-500">
                       {player.country}
                     </span>
                   ) : null}
-                  <span className="truncate text-sm font-bold">{player?.name ?? "TBD"}</span>
+                  <span
+                    className={cn(
+                      "truncate text-sm",
+                      isWinner ? "font-extrabold text-ink" : "font-bold text-ink",
+                      isLoser && !isPicked && "font-semibold text-slate-400 line-through"
+                    )}
+                  >
+                    {player?.name ?? "TBD"}
+                  </span>
                 </span>
                 <span className="flex shrink-0 items-center gap-1.5">
-                  {player?.seed ? (
-                    <span className={cn("text-xs font-semibold", isWinner ? "text-white/70" : "text-slate-500")}>[{player.seed}]</span>
+                  {isPicked ? (
+                    <span
+                      className={cn(
+                        "inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-black uppercase tracking-wide",
+                        pickState === "pending" && "bg-slate-200 text-slate-600",
+                        pickState === "correct" && "bg-court-100 text-court-700",
+                        pickState === "wrong" && "bg-clay-100 text-clay-700"
+                      )}
+                    >
+                      Pick
+                      {pickState === "correct" ? <Check size={10} /> : pickState === "wrong" ? <X size={10} /> : null}
+                    </span>
                   ) : null}
-                  {isWinner ? <Trophy size={14} /> : isPicked ? <Check size={14} /> : !disabled ? <CircleDot size={12} className="text-slate-300" /> : null}
+                  {player?.seed ? (
+                    <span className={cn("text-xs font-semibold", isLoser && !isPicked ? "text-slate-400" : "text-slate-500")}>[{player.seed}]</span>
+                  ) : null}
+                  {isWinner ? (
+                    <Trophy size={14} className="text-amber-500" />
+                  ) : !isPicked && !disabled && !hasResult ? (
+                    <CircleDot size={12} className="text-slate-300" />
+                  ) : null}
                 </span>
               </button>
             );
