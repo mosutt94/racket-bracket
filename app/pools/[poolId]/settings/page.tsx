@@ -54,7 +54,7 @@ export default function ScoringSettingsPage({ params }: { params: { poolId: stri
     <AppFrame>
       <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
         <PoolNav poolId={params.poolId} />
-        <div className="rounded-xl border border-court-100 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-court-300 bg-white p-6 shadow-sm">
           <h1 className="text-3xl font-black text-ink">Scoring configuration</h1>
           <p className="mt-2 text-sm text-slate-600">Commissioners can change these values before the tournament starts.</p>
           <div className="mt-6 space-y-4">

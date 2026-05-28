@@ -21,8 +21,8 @@ export function AppFrame({ children, compact = false }: { children: React.ReactN
   }
 
   return (
-    <div className="min-h-screen bg-[#f7faf5]">
-      {!compact ? <header className="border-b border-court-100 bg-white/90 backdrop-blur">
+    <div className="min-h-screen bg-[#e8ede9]">
+      {!compact ? <header className="border-b border-court-300 bg-white/90 backdrop-blur">
         <div
           className={cn(
             "mx-auto flex items-center justify-between px-4 sm:px-6 lg:px-8",

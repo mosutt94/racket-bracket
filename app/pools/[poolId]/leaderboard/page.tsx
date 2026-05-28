@@ -28,7 +28,7 @@ export default function LeaderboardPage({ params }: { params: { poolId: string }
       <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
         <PoolNav poolId={params.poolId} />
         <h1 className="text-3xl font-black text-ink">Leaderboard</h1>
-        <div className="mt-5 overflow-hidden rounded-xl border border-court-100 bg-white shadow-sm">
+        <div className="mt-5 overflow-hidden rounded-xl border border-court-300 bg-white shadow-sm">
           {leaderboard.map((row, index) => (
             <div key={row.userId} className="grid grid-cols-[52px_1fr_90px] items-center border-b border-slate-100 px-4 py-4 last:border-b-0">
               <span className="text-sm font-black text-slate-500">{index + 1}</span>

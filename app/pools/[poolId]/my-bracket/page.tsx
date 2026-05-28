@@ -243,7 +243,7 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
             </button>
           </div>
         </div>
-        <div className="mb-2 rounded-lg border border-court-100 bg-white p-2 shadow-sm">
+        <div className="mb-2 rounded-lg border border-court-300 bg-white p-2 shadow-sm">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
             {roundProgress.map(({ round, picked, total }) => (
               <div
@@ -293,7 +293,7 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
           onPick={choose}
         />
         {!submitted ? (
-          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-court-100 bg-white/95 px-3 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.12)] backdrop-blur">
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-court-300 bg-white/95 px-3 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.12)] backdrop-blur">
             <div className="mx-auto flex max-w-5xl items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-black text-ink">

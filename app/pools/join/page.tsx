@@ -16,7 +16,7 @@ export default function JoinPoolPage() {
   return (
     <AppFrame>
       <main className="mx-auto max-w-xl px-4 py-10">
-        <div className="rounded-xl border border-court-100 bg-white p-6 shadow-soft">
+        <div className="rounded-xl border border-court-300 bg-white p-6 shadow-soft">
           <h1 className="text-2xl font-black">Join a private bracket</h1>
           <label className="mt-6 block text-sm font-semibold text-slate-700">
             Invite code

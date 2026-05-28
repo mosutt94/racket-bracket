@@ -19,7 +19,7 @@ export function PoolNav({ poolId, compact = false }: { poolId: string; compact?:
             href={href}
             key={href}
             className={cn(
-              "rounded-full border border-court-100 bg-white font-semibold text-slate-700 hover:border-court-300 hover:text-court-700",
+              "rounded-full border border-court-300 bg-white font-semibold text-slate-700 hover:border-court-300 hover:text-court-700",
               compact ? "px-2.5 py-1 text-xs" : "px-4 py-2 text-sm"
             )}
           >

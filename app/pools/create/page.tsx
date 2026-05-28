@@ -69,7 +69,7 @@ export default function CreatePoolPage() {
   return (
     <AppFrame>
       <main className="mx-auto max-w-xl px-4 py-10">
-        <div className="rounded-xl border border-court-100 bg-white p-6 shadow-soft">
+        <div className="rounded-xl border border-court-300 bg-white p-6 shadow-soft">
           <p className="text-sm font-bold uppercase tracking-wide text-court-700">Commissioner</p>
           <h1 className="mt-1 text-2xl font-black">Create a bracket</h1>
           <p className="mt-2 text-sm text-slate-600">Picks a Grand Slam, creates the invite link, and imports the draw from ESPN as soon as it&apos;s published.</p>

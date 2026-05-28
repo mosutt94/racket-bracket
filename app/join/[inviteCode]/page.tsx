@@ -39,7 +39,7 @@ export default function InviteJoinPage({ params }: { params: { inviteCode: strin
   return (
     <AppFrame>
       <main className="mx-auto flex min-h-[calc(100vh-65px)] max-w-xl items-center px-4 py-10">
-        <section className="w-full rounded-xl border border-court-100 bg-white p-6 shadow-soft">
+        <section className="w-full rounded-xl border border-court-300 bg-white p-6 shadow-soft">
           <p className="text-sm font-black uppercase tracking-wide text-court-700">Bracket invite</p>
           <h1 className="mt-2 text-3xl font-black text-ink">Join Racket Bracket</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">

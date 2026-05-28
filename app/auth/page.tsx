@@ -75,7 +75,7 @@ export default function AuthPage() {
   return (
     <AppFrame>
       <main className="mx-auto flex min-h-[calc(100vh-65px)] max-w-lg items-center px-4 py-10">
-        <div className="w-full rounded-xl border border-court-100 bg-white p-6 shadow-soft">
+        <div className="w-full rounded-xl border border-court-300 bg-white p-6 shadow-soft">
           {step === "email" ? (
             <>
               <h1 className="text-2xl font-black text-ink">Commissioner sign in</h1>
