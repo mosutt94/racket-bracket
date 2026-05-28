@@ -21,6 +21,11 @@ const config: Config = {
           500: "#db6f3d",
           700: "#9b3e23"
         },
+        // Tennis-ball optic yellow-green — slam-neutral accent for highlights.
+        ball: {
+          DEFAULT: "#d2ed51",
+          500: "#c2e034"
+        },
         ink: "#17211a"
       },
       boxShadow: {
