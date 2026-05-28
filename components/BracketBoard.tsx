@@ -110,7 +110,7 @@ export function BracketBoard({
     // The bracket has its own horizontal scroll container now (.bracket-scroll),
     // so we scroll INSIDE that ref instead of moving the window.
     scrollRef.current?.scrollTo({
-      left: Math.max(0, getX(roundNumber) - 12),
+      left: getRoundScrollX(roundNumber),
       behavior
     });
   };
@@ -143,6 +143,11 @@ export function BracketBoard({
     const span = cardWidth + columnGap;
     return (roundNumber - 1) * span;
   };
+
+  // The scrollLeft a round lands at when focused. The mobile scroll-snap anchors
+  // and focusRound() both use this so a swipe snaps to exactly where a chip tap
+  // would scroll. Clamped so round 1 snaps flush to the left edge.
+  const getRoundScrollX = (roundNumber: number) => Math.max(0, getX(roundNumber) - 12);
 
   const getY = (roundNumber: number, localIndex: number) => {
     const step = cardHeight + cardGap;
@@ -309,6 +314,17 @@ export function BracketBoard({
       <svg className="pointer-events-none absolute left-4 top-0 z-0" width={contentWidth} height={boardHeight} aria-hidden="true">
         {renderConnectors()}
       </svg>
+      {/* Per-round scroll-snap anchors. Invisible 1px-wide strips at each round's
+          focus scroll position; on mobile (.bracket-scroll has scroll-snap-type)
+          a swipe snaps to one of these, one round per swipe. Inert on desktop. */}
+      {sortedRounds.map((round) => (
+        <div
+          key={`snap-${round.id}`}
+          aria-hidden="true"
+          className="pointer-events-none absolute top-0 z-0 snap-start snap-always"
+          style={{ left: getRoundScrollX(round.roundNumber), width: 1, height: boardHeight }}
+        />
+      ))}
       {sortedRounds.flatMap((round) =>
         getRoundMatches(round.roundNumber).map((match, localIndex) => (
           <div

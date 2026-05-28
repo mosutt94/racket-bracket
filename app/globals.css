@@ -34,3 +34,14 @@ select {
   scrollbar-color: #a6d99f #eef5ec;
   scrollbar-width: thin;
 }
+
+/* Mobile: a swipe snaps the bracket one round at a time instead of scrolling
+   freely. The per-round snap anchors rendered inside BracketBoard sit at the
+   exact scroll offset focusRound() targets, so swiping and tapping a round
+   chip land in the same place — and the focused column expands/collapses to
+   match. Desktop (>=1024px) keeps free horizontal scroll. */
+@media (max-width: 1023px) {
+  .bracket-scroll {
+    scroll-snap-type: x mandatory;
+  }
+}
