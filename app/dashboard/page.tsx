@@ -70,13 +70,13 @@ export default function DashboardPage() {
                 >
                   Open bracket <ArrowRight size={16} />
                 </Link>
-                <div className="mt-4 rounded-lg border border-court-300 bg-court-50 p-3">
+                <div className="mt-4 rounded-lg border border-court-200 bg-court-50 p-3">
                   <p className="text-xs font-bold uppercase tracking-wide text-court-700">Invite link</p>
                   <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <p className="min-w-0 truncate text-sm font-semibold text-court-900">{origin ? `${origin}/join/${pool.inviteCode}` : `/join/${pool.inviteCode}`}</p>
                     <button
                       onClick={() => copyInviteLink(pool.inviteCode)}
-                      className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-court-300 bg-white px-3 py-2 text-sm font-bold text-court-800 hover:bg-court-100"
+                      className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-court-200 bg-white px-3 py-2 text-sm font-bold text-court-800 hover:bg-court-100"
                     >
                       <Copy size={15} /> {copiedInviteCode === pool.inviteCode ? "Copied" : "Copy link"}
                     </button>
@@ -85,7 +85,7 @@ export default function DashboardPage() {
               </article>
             );
           }) : (
-            <div className="rounded-xl border border-court-300 bg-white p-5 shadow-sm">
+            <div className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
               <h2 className="text-xl font-black text-ink">No brackets yet</h2>
               <p className="mt-2 text-sm text-slate-600">Create a bracket or join one with an invite code.</p>
             </div>

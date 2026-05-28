@@ -147,7 +147,7 @@ export default function MatchManagementPage({ params }: { params: { poolId: stri
           </label>
         </div>
 
-        <div className="mt-5 rounded-xl border border-court-300 bg-white p-4 shadow-sm">
+        <div className="mt-5 rounded-xl border border-court-200 bg-white p-4 shadow-sm">
           <h2 className="font-black text-ink">{activeRound?.roundName ?? "Round"}</h2>
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {visibleMatches.map((match) => {

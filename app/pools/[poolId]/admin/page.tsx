@@ -101,7 +101,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
           <Metric icon={<Settings />} label="Last sync" value={formatDateTime(activeTournament.lastSyncedAt ?? activeInstance?.lastSyncedAt)} small />
         </div>
         <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_1fr]">
-          <section className="rounded-xl border border-court-300 bg-white p-5 shadow-sm lg:col-span-2">
+          <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm lg:col-span-2">
             <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
               <div>
                 <div className="flex items-center gap-2 text-court-700">
@@ -132,14 +132,14 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
               ) : null}
             </div>
           </section>
-          <section className="rounded-xl border border-court-300 bg-white p-5 shadow-sm">
+          <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-black">Bracket tools</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <button onClick={() => setTournamentStatus("locked")} className="rounded-lg bg-ink px-4 py-3 font-bold text-white">Lock picking</button>
               <button onClick={() => setTournamentStatus("picking_open")} className="rounded-lg border border-court-200 px-4 py-3 font-bold text-court-800">Unlock picking</button>
             </div>
           </section>
-          <section className="rounded-xl border border-court-300 bg-white p-5 shadow-sm">
+          <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-black">Bracket corrections</h2>
             <p className="mt-1 text-sm text-slate-600">
               Open the bracket editor, find the match, edit the player names or mark the winner, and corrections are locked against future sync overwrites.
@@ -148,7 +148,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
               Open bracket editor
             </Link>
           </section>
-          <section className="rounded-xl border border-court-300 bg-white p-5 shadow-sm">
+          <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-black">Submission tracker</h2>
             <div className="mt-4 space-y-2">
               {leaderboard.map((row) => (
@@ -167,7 +167,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
 
 function Metric({ icon, label, value, small }: { icon: React.ReactNode; label: string; value: string | number; small?: boolean }) {
   return (
-    <div className="rounded-xl border border-court-300 bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-court-200 bg-white p-4 shadow-sm">
       <div className="text-court-700">{icon}</div>
       <p className="mt-3 text-xs font-bold uppercase text-slate-500">{label}</p>
       <p className={small ? "mt-1 text-sm font-black" : "mt-1 text-2xl font-black"}>{value}</p>

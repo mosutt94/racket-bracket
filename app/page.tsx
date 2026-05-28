@@ -41,7 +41,7 @@ export default function LandingPage() {
             [Trophy, "Tennis bracket flow", "A March Madness-style bracket adapted for Grand Slam singles draws."],
             [ShieldCheck, "Built to change", "Scoring, providers, tournaments, and admin tools live in separate modules."]
           ].map(([Icon, title, body]) => (
-            <div key={title as string} className="rounded-lg border border-court-300 bg-white p-5 shadow-sm">
+            <div key={title as string} className="rounded-lg border border-court-200 bg-white p-5 shadow-sm">
               <Icon className="text-court-700" />
               <h2 className="mt-4 font-bold text-ink">{title as string}</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">{body as string}</p>

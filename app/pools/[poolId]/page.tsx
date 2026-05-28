@@ -49,7 +49,7 @@ export default function PoolHomePage({ params }: { params: { poolId: string } })
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <PoolNav poolId={pool.id} />
         <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
-          <section className="rounded-xl border border-court-300 bg-white p-6 shadow-soft">
+          <section className="rounded-xl border border-court-200 bg-white p-6 shadow-soft">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-bold uppercase tracking-wide text-clay-700">{pool.inviteCode}</p>
@@ -90,7 +90,7 @@ export default function PoolHomePage({ params }: { params: { poolId: string } })
               </Link>
             </div>
           </section>
-          <section className="rounded-xl border border-court-300 bg-white p-6 shadow-soft">
+          <section className="rounded-xl border border-court-200 bg-white p-6 shadow-soft">
             <h2 className="text-lg font-black">Top standings</h2>
             <div className="mt-4 space-y-3">
               {leaderboard.slice(0, 5).map((row, index) => (
