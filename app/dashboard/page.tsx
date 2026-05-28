@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Copy, Plus } from "lucide-react";
+import { ArrowRight, Copy, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppFrame } from "@/components/AppFrame";
@@ -60,18 +60,27 @@ export default function DashboardPage() {
           {brackets.length > 0 ? brackets.map((pool) => {
             const tournament = findTournamentForPool(state, pool.id);
             return (
-              <article key={pool.id} className="rounded-xl border border-court-100 bg-white p-5 shadow-sm hover:shadow-soft">
+              <article key={pool.id} className="rounded-xl border-2 border-court-200 bg-white p-5 shadow-soft transition hover:border-court-500 hover:shadow-lg">
                 <p className="text-xs font-bold uppercase tracking-wide text-clay-700">Invite {pool.inviteCode}</p>
-                <Link href={`/pools/${pool.id}`} className="mt-2 block text-xl font-black text-ink hover:text-court-700">{pool.name}</Link>
-                <p className="mt-2 text-sm text-slate-600">{tournament?.name ?? "No active tournament"}</p>
-                <div className="mt-4 flex flex-col gap-2 rounded-lg bg-court-50 p-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="min-w-0 truncate text-sm font-semibold text-court-900">{origin ? `${origin}/join/${pool.inviteCode}` : `/join/${pool.inviteCode}`}</p>
-                  <button
-                    onClick={() => copyInviteLink(pool.inviteCode)}
-                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-court-700 px-3 py-2 text-sm font-bold text-white hover:bg-court-900"
-                  >
-                    <Copy size={15} /> {copiedInviteCode === pool.inviteCode ? "Copied" : "Copy link"}
-                  </button>
+                <Link href={`/pools/${pool.id}`} className="mt-2 block text-2xl font-black text-ink hover:text-court-700">{pool.name}</Link>
+                <p className="mt-1 text-sm text-slate-600">{tournament?.name ?? "No active tournament"}</p>
+                <Link
+                  href={`/pools/${pool.id}`}
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-court-700 px-4 py-3 font-bold text-white hover:bg-court-900 sm:w-auto"
+                >
+                  Open bracket <ArrowRight size={16} />
+                </Link>
+                <div className="mt-4 rounded-lg border border-court-100 bg-court-50 p-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-court-700">Invite link</p>
+                  <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="min-w-0 truncate text-sm font-semibold text-court-900">{origin ? `${origin}/join/${pool.inviteCode}` : `/join/${pool.inviteCode}`}</p>
+                    <button
+                      onClick={() => copyInviteLink(pool.inviteCode)}
+                      className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-court-300 bg-white px-3 py-2 text-sm font-bold text-court-800 hover:bg-court-100"
+                    >
+                      <Copy size={15} /> {copiedInviteCode === pool.inviteCode ? "Copied" : "Copy link"}
+                    </button>
+                  </div>
                 </div>
               </article>
             );
