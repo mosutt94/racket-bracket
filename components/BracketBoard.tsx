@@ -68,6 +68,22 @@ function formatLiveScore(score: BracketLiveScore) {
   return setScores || score.scoreSummary || null;
 }
 
+// Nearest ancestor that actually scrolls vertically. Returns null when the
+// page itself is the scroller (so callers fall back to window). Lets the board
+// work both in the normal page-scroll layout and the app-shell (where a fixed
+// container scrolls instead of the document).
+function getVerticalScrollParent(node: HTMLElement | null): HTMLElement | null {
+  let el = node?.parentElement ?? null;
+  while (el) {
+    const overflowY = getComputedStyle(el).overflowY;
+    if ((overflowY === "auto" || overflowY === "scroll") && el.scrollHeight > el.clientHeight) {
+      return el;
+    }
+    el = el.parentElement;
+  }
+  return null;
+}
+
 export function BracketBoard({
   bracketId = "",
   matches,
@@ -190,11 +206,17 @@ export function BracketBoard({
     // read would be mid-flight. Computing it means we can scroll immediately —
     // which also stops the page from drifting down on swipe momentum during a
     // wait before we correct it.
-    const boardTopDoc = boardRef.current.getBoundingClientRect().top + window.scrollY;
     const cardY = getY(focusedRoundNumber, targetIndex);
     const headerOffset = headerRef.current?.offsetHeight ?? 0;
-    const top = boardTopDoc + cardY - headerOffset - 12;
-    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    const scroller = getVerticalScrollParent(boardRef.current);
+    if (scroller) {
+      const boardTopInScroller =
+        boardRef.current.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+      scroller.scrollTo({ top: Math.max(0, boardTopInScroller + cardY - headerOffset - 12), behavior: "smooth" });
+    } else {
+      const boardTopDoc = boardRef.current.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo({ top: Math.max(0, boardTopDoc + cardY - headerOffset - 12), behavior: "smooth" });
+    }
     // Only react to round changes — not to each pick, which would yank the view
     // mid-pick. picks/bracketId are read at swipe time on purpose.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -90,6 +90,21 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirty, state, tournament, activeBracket]);
 
+  // App-shell: lock the document so only the bracket scrolls. With nothing to
+  // scroll at the page level, the mobile browser toolbar stops hiding/showing,
+  // giving a contained, app-like feel.
+  useEffect(() => {
+    const html = document.documentElement;
+    const prevHtml = html.style.overflow;
+    const prevBody = document.body.style.overflow;
+    html.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = prevHtml;
+      document.body.style.overflow = prevBody;
+    };
+  }, []);
+
   if (!state || !tournament || !bracket || !activeBracket) return null;
   const locked = activeBracket.status !== "draft" || tournament.status !== "picking_open";
   const complete = isBracketComplete(activeBracket.id, matches, state.bracketPicks);
@@ -198,8 +213,8 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
 
   return (
     <AppFrame compact>
-      <main className={`mx-auto max-w-none px-2 pt-1 sm:px-3 ${submitted ? "pb-2" : "pb-24"}`}>
-        <div className="mb-1 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+      <main className="flex h-[100dvh] flex-col overflow-hidden px-2 pt-1 sm:px-3">
+        <div className="mb-1 flex shrink-0 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <PoolNav poolId={params.poolId} compact />
           <div className="flex shrink-0 items-center justify-end gap-2">
             <p className="max-w-[180px] truncate text-sm font-bold text-slate-600">Hi, {currentUser.displayName}</p>
@@ -212,65 +227,67 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
             </button>
           </div>
         </div>
-        <div className="mb-1 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <p className="text-xs font-bold uppercase tracking-wide text-court-700">My bracket</p>
-              <p className="text-xs font-semibold text-slate-600">Status: {activeBracket.status}</p>
-              {saveStatus === "saved" ? <p className="text-xs font-semibold text-court-700">Saved</p> : null}
-              {saveStatus === "submitted" ? <p className="text-xs font-semibold text-court-700">Submitted</p> : null}
-              {saveStatus === "error" ? <p className="text-xs font-semibold text-clay-700">Save failed</p> : null}
-              {!submitted ? <p className="text-xs font-semibold text-slate-600">{pickedCount} of {matches.length} picks made</p> : null}
-            </div>
-            <h1 className="truncate text-lg font-black text-ink sm:text-xl">{tournament.name}</h1>
-          </div>
-        </div>
-        <div className="mb-2 hidden rounded-lg border border-court-200 bg-white p-2 shadow-sm lg:block">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-            {roundProgress.map(({ round, picked, total }) => (
-              <div
-                key={round.id}
-                className="rounded-lg bg-court-50 px-2.5 py-2"
-              >
-                <p className="truncate text-[11px] font-black text-ink">{round.roundName}</p>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white">
-                  <div className="h-full rounded-full bg-court-700" style={{ width: `${total ? (picked / total) * 100 : 0}%` }} />
-                </div>
-                <p className="mt-1 text-[11px] font-bold text-slate-600">{picked}/{total}</p>
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain">
+          <div className="mb-1 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <p className="text-xs font-bold uppercase tracking-wide text-court-700">My bracket</p>
+                <p className="text-xs font-semibold text-slate-600">Status: {activeBracket.status}</p>
+                {saveStatus === "saved" ? <p className="text-xs font-semibold text-court-700">Saved</p> : null}
+                {saveStatus === "submitted" ? <p className="text-xs font-semibold text-court-700">Submitted</p> : null}
+                {saveStatus === "error" ? <p className="text-xs font-semibold text-clay-700">Save failed</p> : null}
+                {!submitted ? <p className="text-xs font-semibold text-slate-600">{pickedCount} of {matches.length} picks made</p> : null}
               </div>
-            ))}
+              <h1 className="truncate text-lg font-black text-ink sm:text-xl">{tournament.name}</h1>
+            </div>
           </div>
+          <div className="mb-2 hidden rounded-lg border border-court-200 bg-white p-2 shadow-sm lg:block">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+              {roundProgress.map(({ round, picked, total }) => (
+                <div
+                  key={round.id}
+                  className="rounded-lg bg-court-50 px-2.5 py-2"
+                >
+                  <p className="truncate text-[11px] font-black text-ink">{round.roundName}</p>
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white">
+                    <div className="h-full rounded-full bg-court-700" style={{ width: `${total ? (picked / total) * 100 : 0}%` }} />
+                  </div>
+                  <p className="mt-1 text-[11px] font-bold text-slate-600">{picked}/{total}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          {!submitted && complete ? (
+            <div className="mb-2 flex items-center gap-2 rounded-lg border border-court-200 bg-court-50 px-3 py-2 text-sm font-bold text-court-900">
+              <CheckCircle2 size={18} />
+              All picks are in. Review your champion, then submit.
+            </div>
+          ) : null}
+          {submitted ? (
+            <div className="mb-2 flex items-center gap-2 rounded-lg border border-court-200 bg-court-50 px-3 py-2 text-sm font-bold text-court-900">
+              <CheckCircle2 size={18} />
+              Bracket submitted. Your picks are now read-only.
+            </div>
+          ) : null}
+          <BracketBoard
+            bracketId={activeBracket.id}
+            mode={locked ? "review" : "picking"}
+            locked={locked}
+            matches={matches}
+            players={state.players}
+            rounds={rounds}
+            picks={state.bracketPicks}
+            highlightedMatchId={highlightedMatchId}
+            pickedCount={pickedCount}
+            totalPicks={matches.length}
+            liveScores={liveScores}
+            nextMissingAvailable={!submitted && Boolean(nextMissingMatch)}
+            onNextMissing={jumpToNextMissingPick}
+            onPick={choose}
+          />
         </div>
-        {!submitted && complete ? (
-          <div className="mb-2 flex items-center gap-2 rounded-lg border border-court-200 bg-court-50 px-3 py-2 text-sm font-bold text-court-900">
-            <CheckCircle2 size={18} />
-            All picks are in. Review your champion, then submit.
-          </div>
-        ) : null}
-        {submitted ? (
-          <div className="mb-2 flex items-center gap-2 rounded-lg border border-court-200 bg-court-50 px-3 py-2 text-sm font-bold text-court-900">
-            <CheckCircle2 size={18} />
-            Bracket submitted. Your picks are now read-only.
-          </div>
-        ) : null}
-        <BracketBoard
-          bracketId={activeBracket.id}
-          mode={locked ? "review" : "picking"}
-          locked={locked}
-          matches={matches}
-          players={state.players}
-          rounds={rounds}
-          picks={state.bracketPicks}
-          highlightedMatchId={highlightedMatchId}
-          pickedCount={pickedCount}
-          totalPicks={matches.length}
-          liveScores={liveScores}
-          nextMissingAvailable={!submitted && Boolean(nextMissingMatch)}
-          onNextMissing={jumpToNextMissingPick}
-          onPick={choose}
-        />
         {!submitted ? (
-          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-court-200 bg-white/95 px-3 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.12)] backdrop-blur">
+          <div className="shrink-0 border-t border-court-200 bg-white px-3 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.12)]">
             <div className="mx-auto flex max-w-5xl items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-black text-ink">
