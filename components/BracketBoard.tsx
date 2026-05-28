@@ -271,12 +271,12 @@ export function BracketBoard({
                 disabled={disabled}
                 onClick={() => playerId && onPick?.(match.id, playerId)}
                 className={cn(
-                  "flex w-full flex-1 items-center justify-between gap-2 rounded border-l-4 border-transparent px-2 text-left text-[13px] leading-none transition",
-                  pickState === "pending" && "border-slate-300 bg-slate-50",
-                  pickState === "correct" && "border-court-500 bg-court-50",
-                  pickState === "wrong" && "border-clay-500 bg-clay-50",
+                  "flex w-full flex-1 items-center justify-between gap-2 rounded px-2 text-left text-[13px] leading-none transition",
+                  pickState === "pending" && "bg-slate-100",
+                  pickState === "correct" && "bg-court-100",
+                  pickState === "wrong" && "bg-clay-100",
                   isLoser && !isPicked && "opacity-60",
-                  !disabled && "hover:bg-slate-50"
+                  !disabled && pickState === "none" && "hover:bg-slate-50"
                 )}
               >
                 <span className="flex min-w-0 items-center gap-2 leading-none">
@@ -303,8 +303,8 @@ export function BracketBoard({
                       className={cn(
                         "inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-black uppercase tracking-wide",
                         pickState === "pending" && "bg-slate-200 text-slate-600",
-                        pickState === "correct" && "bg-court-100 text-court-700",
-                        pickState === "wrong" && "bg-clay-100 text-clay-700"
+                        pickState === "correct" && "bg-court-200 text-court-700",
+                        pickState === "wrong" && "bg-clay-300 text-clay-700"
                       )}
                     >
                       Pick
