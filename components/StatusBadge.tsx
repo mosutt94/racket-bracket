@@ -5,10 +5,10 @@ const tone: Record<string, string> = {
   setup: "bg-slate-100 text-slate-700",
   picking_open: "bg-court-100 text-court-900",
   locked: "bg-amber-100 text-amber-800",
-  in_progress: "bg-blue-100 text-blue-800",
-  completed: "bg-ink text-white",
+  in_progress: "bg-ball text-court-900",
+  completed: "bg-court-900 text-white",
   scheduled: "bg-slate-100 text-slate-700",
-  live: "bg-clay-100 text-clay-700",
+  live: "bg-ball text-court-900",
   draft: "bg-slate-100 text-slate-700",
   submitted: "bg-court-100 text-court-900"
 };

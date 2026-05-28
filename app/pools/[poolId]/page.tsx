@@ -52,7 +52,7 @@ export default function PoolHomePage({ params }: { params: { poolId: string } })
           <section className="rounded-xl border border-court-200 bg-white p-6 shadow-soft">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-bold uppercase tracking-wide text-clay-700">{pool.inviteCode}</p>
+                <p className="text-sm font-bold uppercase tracking-wide text-court-700">{pool.inviteCode}</p>
                 <h1 className="text-3xl font-black text-ink">{pool.name}</h1>
               </div>
               <StatusBadge status={tournament.status} />

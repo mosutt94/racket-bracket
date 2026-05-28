@@ -61,7 +61,7 @@ export default function DashboardPage() {
             const tournament = findTournamentForPool(state, pool.id);
             return (
               <article key={pool.id} className="rounded-xl border-2 border-court-200 bg-white p-5 shadow-soft transition hover:border-court-500 hover:shadow-lg">
-                <p className="text-xs font-bold uppercase tracking-wide text-clay-700">Invite {pool.inviteCode}</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-court-700">Invite {pool.inviteCode}</p>
                 <Link href={`/pools/${pool.id}`} className="mt-2 block text-2xl font-black text-ink hover:text-court-700">{pool.name}</Link>
                 <p className="mt-1 text-sm text-slate-600">{tournament?.name ?? "No active tournament"}</p>
                 <Link
