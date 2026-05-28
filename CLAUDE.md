@@ -23,7 +23,7 @@ No test runner is configured. Path alias `@/*` resolves to repo root.
 ## Hard requirements
 
 - **Supabase env vars** in `.env.local` (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`). All three migrations applied (`supabase db push` or via Studio).
-- All API routes return 500 with "Supabase is not configured" if the env vars are missing — there is no demo / localStorage fallback.
+- API routes return "Supabase is not configured" if the env vars are missing — there is no demo / localStorage fallback. Status is 500 on every route except `admin/recalculate`, which returns 400.
 
 ## Architecture: shared-tournament-per-Slam
 
@@ -37,27 +37,28 @@ Implications when extending:
 
 ## Service layer
 
-Pure functions under [lib/services/](lib/services), takes `AppState` in, returns `AppState` out — no I/O.
+Mostly pure functions under [lib/services/](lib/services), takes `AppState` in, returns `AppState` out — no I/O.
 
 - [bracket-service.ts](lib/services/bracket-service.ts) — draft/submit picks + propagation
 - [scoring-service.ts](lib/services/scoring-service.ts) — recalculates `bracketPicks.isCorrect`, `pointsAwarded`, and bracket `totalScore` from `tournament_rounds` points when winners change
 - [bracket-shell-service.ts](lib/services/bracket-shell-service.ts) — pure 128-slot / 127-match bracket-shape generator + Slam calendar defaults. Used by `createGrandSlamBracketForPool` in persistence.
 - [espn-mapping-service.ts](lib/services/espn-mapping-service.ts) — maps ESPN scoreboard payloads onto draw slots (used by the admin re-import endpoint)
+- [sync-service.ts](lib/services/sync-service.ts) — `syncMockLiveScores` mock-provider sync helper. **Not pure** — it goes through `provider-service` and awaits provider network calls, unlike the four above.
 
 ## Persistence
 
 [lib/supabase/persistence.ts](lib/supabase/persistence.ts) is the only file that writes to Postgres. Key entry points:
 
-- `createPool` / `createPoolByEmail` — creates pool + attaches it to the (shared) tournament. First pool for a Slam triggers `createGrandSlamBracketForPool` which builds rounds + 128 players + 128 draw_slots + 127 matches once, then calls `importEspnDrawInSupabase`. Subsequent pools just attach.
+- `createPool` / `createPoolByEmail` — creates pool + attaches it to the (shared) tournament. First pool for a Slam triggers `createGrandSlamBracketForPool` (internal, not exported) which builds rounds + 128 players + 128 draw_slots + 127 matches once, then calls `importEspnDrawInSupabase`. Subsequent pools just attach.
 - `getOrCreateProfileByEmailAndAuthenticate` — used by `/api/auth/identify` for sign-in
 - `importEspnDrawInSupabase` — fetches ESPN's bracket HTML, fills R1 players + match IDs. Idempotent. Parallelizes ~320 row updates via `Promise.all`.
 - `syncEspnLiveUpdatesInSupabase` — pulls ESPN scoreboard, applies winners, advances `next_match_id` chain, calls `recalculateTournamentScoresInSupabase`.
 - `setTournamentStatusInSupabase` / `updateTournamentScoringInSupabase` — commissioner controls used by the admin and settings pages.
-- `getAppStateFromSupabase` — fetches ALL rows for all 13 tables into a single `AppState`. **This is a known scaling issue** — every page load pulls every pool's data. Uses `fetchAllRows` pagination on matches + bracket_picks to get past PostgREST's 1000-row response cap. Scope down per-pool when adding new features at scale.
+- `getAppStateFromSupabase` — fetches ALL rows for every table into a single `AppState` (13 tables queried directly, plus `brackets` + `bracket_picks` via a separate `getBracketBundle({})` call). `scoreEvents` and `liveScoreSnapshots` are hardcoded to `[]` (never fetched). **This is a known scaling issue** — every page load pulls every pool's data. Uses `fetchAllRows` pagination on `matches` to get past PostgREST's 1000-row response cap. Scope down per-pool when adding new features at scale.
 
 ## Provider
 
-[`EspnTennisProvider`](lib/providers/espn-tennis-provider.ts) is the only registered provider. Key methods:
+[`EspnTennisProvider`](lib/providers/espn-tennis-provider.ts) is the only concrete provider implementation. It's resolved through a small registry, `getTennisDataProvider(name = "espn")` in [provider-service.ts](lib/providers/provider-service.ts), against the [`TennisDataProvider`](lib/providers/tennis-data-provider.ts) interface. Key methods:
 
 - `getDrawImportData({ slamType, year, gender })` — scrapes `espn.com/tennis/<slug>/bracket/...`, returns 64 round-1 matchups
 - `getDrawMatchLinks(...)` — returns all 127 match IDs across rounds 1-7 from the same HTML
@@ -65,7 +66,21 @@ Pure functions under [lib/services/](lib/services), takes `AppState` in, returns
 
 ## Routes
 
-Pages in [app/](app). Admin tools live at `app/pools/[poolId]/admin`. JSON API in [app/api/](app/api):
+Pages in [app/](app):
+
+- `/` — landing
+- `/auth` — sign-in
+- `/dashboard` — signed-in user's pools overview
+- `/join/[inviteCode]` — invite-link join flow
+- `/pools/create` — create a pool
+- `/pools/[poolId]` — pool home
+- `/pools/[poolId]/my-bracket` — where a user fills in their picks
+- `/pools/[poolId]/bracket` — read-only bracket board
+- `/pools/[poolId]/leaderboard` — standings
+- `/pools/[poolId]/settings` — commissioner controls (status, scoring)
+- `/pools/[poolId]/admin` + `/pools/[poolId]/admin/matches` — commissioner admin tools
+
+JSON API in [app/api/](app/api):
 
 - `auth/identify` — sign-in (find-or-create profile by email)
 - `pools` GET/POST, `join-pool` POST, `brackets` GET/POST, `state` GET, `live-scores` GET
