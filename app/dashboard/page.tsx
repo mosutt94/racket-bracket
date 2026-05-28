@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Copy, Plus, Ticket } from "lucide-react";
+import { Copy, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppFrame } from "@/components/AppFrame";
@@ -53,9 +53,6 @@ export default function DashboardPage() {
           <div className="flex gap-2">
             <Link href="/pools/create" className="inline-flex items-center gap-2 rounded-lg bg-court-700 px-4 py-2 font-bold text-white">
               <Plus size={18} /> Create bracket
-            </Link>
-            <Link href="/pools/join" className="inline-flex items-center gap-2 rounded-lg border border-court-200 bg-white px-4 py-2 font-bold text-court-800">
-              <Ticket size={18} /> Join
             </Link>
           </div>
         </div>

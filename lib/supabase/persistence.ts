@@ -426,6 +426,17 @@ export async function getOrCreateProfileByEmailAndAuthenticate(input: { email: s
   return getOrCreateProfileByEmail(getClient(), input);
 }
 
+/** Lookup-only: returns the profile for an email, or null if none exists (no creation). */
+export async function findProfileByEmail(email: string) {
+  const { data, error } = await getClient()
+    .from("profiles")
+    .select("*")
+    .eq("email", email.trim().toLowerCase())
+    .maybeSingle();
+  throwIfError(error);
+  return data ? mapProfile(data) : null;
+}
+
 export async function setTournamentStatusInSupabase(input: {
   tournamentId: string;
   status: TournamentStatus;

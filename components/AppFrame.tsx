@@ -36,9 +36,6 @@ export function AppFrame({ children, compact = false }: { children: React.ReactN
             Racket Bracket
           </Link>
           <nav className="flex items-center gap-3 text-sm font-medium text-slate-600">
-            <Link href="/pools/join" className="hover:text-court-700">
-              Join bracket
-            </Link>
             {user ? (
               <>
                 <Link href="/dashboard" className="hidden hover:text-court-700 sm:inline">
@@ -50,7 +47,7 @@ export function AppFrame({ children, compact = false }: { children: React.ReactN
               </>
             ) : (
               <Link href="/auth" className="rounded-full bg-ink px-4 py-2 text-white hover:bg-court-900">
-                Commissioner
+                Sign in
               </Link>
             )}
           </nav>

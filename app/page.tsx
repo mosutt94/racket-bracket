@@ -1,6 +1,6 @@
-import Link from "next/link";
-import { ArrowRight, ShieldCheck, Trophy, Users } from "lucide-react";
+import { ShieldCheck, Trophy, Users } from "lucide-react";
 import { AppFrame } from "@/components/AppFrame";
+import { HomeHeroActions } from "@/components/HomeHeroActions";
 
 export default function LandingPage() {
   return (
@@ -16,14 +16,7 @@ export default function LandingPage() {
                 A polished bracket game for tennis friend groups. Pick every round, sweat every result, and watch the
                 leaderboard move as the Slam unfolds.
               </p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <Link href="/pools/join" className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 font-bold text-court-900 hover:bg-court-50">
-                  Join a bracket
-                </Link>
-                <Link href="/auth" className="inline-flex items-center gap-2 rounded-full border border-white/30 px-5 py-3 font-bold text-white hover:bg-white/10">
-                  Commissioner <ArrowRight size={18} />
-                </Link>
-              </div>
+              <HomeHeroActions />
             </div>
             <div className="rounded-xl border border-white/20 bg-white/10 p-4 shadow-soft backdrop-blur">
               <div className="grid grid-cols-4 gap-3">
