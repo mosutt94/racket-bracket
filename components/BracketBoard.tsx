@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, CircleDot, LocateFixed, Trophy } from "lucide-react";
 import { getProjectedMatchPlayers } from "@/lib/services/bracket-service";
 import { countryCodeToFlagEmoji } from "@/lib/country-flags";
@@ -85,6 +85,7 @@ export function BracketBoard({
   onPick
 }: BracketBoardProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const headerRef = useRef<HTMLDivElement | null>(null);
   const playerById = new Map(players.map((player) => [player.id, player]));
   const sortedRounds = [...rounds].sort((a, b) => a.roundNumber - b.roundNumber);
   const finalRound = sortedRounds[sortedRounds.length - 1];
@@ -164,6 +165,41 @@ export function BracketBoard({
 
   const boardHeight = Math.max(760, ...sortedRounds.map((round) => getRoundHeight(round.roundNumber)));
   const contentHeight = boardHeight + 24;
+
+  // When the focused round changes (swipe or chip tap), drop the user at the
+  // first pick they still need to make in that round — or its top match if the
+  // round is complete. The focused round's cards pack to the top, but the board
+  // stays as tall as the longest round, so without this a swipe from the bottom
+  // of a long round (e.g. R1) lands in empty space below a shorter round's last
+  // card. Vertical-only scroll so we never disturb the horizontal round snap.
+  const didInitialFocus = useRef(false);
+  useEffect(() => {
+    if (!didInitialFocus.current) {
+      didInitialFocus.current = true;
+      return;
+    }
+    const roundMatches = getRoundMatches(focusedRoundNumber);
+    if (!roundMatches.length) return;
+    const target =
+      roundMatches.find(
+        (match) => !picks.some((pick) => pick.bracketId === bracketId && pick.matchId === match.id)
+      ) ?? roundMatches[0];
+    // Wait for the column expand/collapse transition (duration-300 on the cards)
+    // to finish before measuring. The cards animate their `top`, so reading the
+    // rect mid-flight would scroll to the card's old position and bury the target
+    // under the sticky header.
+    const timer = window.setTimeout(() => {
+      const matchEl = document.getElementById(`match-${target.id}`);
+      if (!matchEl) return;
+      const headerOffset = headerRef.current?.offsetHeight ?? 0;
+      const top = window.scrollY + matchEl.getBoundingClientRect().top - headerOffset - 12;
+      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    }, 340);
+    return () => window.clearTimeout(timer);
+    // Only react to round changes — not to each pick, which would yank the view
+    // mid-pick. picks/bracketId are read at swipe time on purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedRoundNumber]);
 
   const renderMatch = (match: Match, compact = false) => {
     const projected =
@@ -369,7 +405,7 @@ export function BracketBoard({
 
   return (
     <div className="rounded-xl border border-[#bccfbe] bg-[#dde7dd] shadow-inner">
-      <div className="sticky top-0 z-30 border-b border-slate-200 bg-white px-4 py-3">
+      <div ref={headerRef} className="sticky top-0 z-30 border-b border-slate-200 bg-white px-4 py-3">
         <div className="grid gap-1.5">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-black uppercase text-court-700">Progress</p>
