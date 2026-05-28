@@ -241,11 +241,6 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
             ))}
           </div>
         </div>
-        {!submitted && remainingPicks > 0 ? (
-          <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900">
-            Make every pick before submitting. {remainingPicks} picks left.
-          </div>
-        ) : null}
         {!submitted && complete ? (
           <div className="mb-2 flex items-center gap-2 rounded-lg border border-court-200 bg-court-50 px-3 py-2 text-sm font-bold text-court-900">
             <CheckCircle2 size={18} />
