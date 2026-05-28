@@ -86,6 +86,7 @@ export function BracketBoard({
 }: BracketBoardProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
+  const boardRef = useRef<HTMLDivElement | null>(null);
   const playerById = new Map(players.map((player) => [player.id, player]));
   const sortedRounds = [...rounds].sort((a, b) => a.roundNumber - b.roundNumber);
   const finalRound = sortedRounds[sortedRounds.length - 1];
@@ -179,23 +180,21 @@ export function BracketBoard({
       return;
     }
     const roundMatches = getRoundMatches(focusedRoundNumber);
-    if (!roundMatches.length) return;
-    const target =
-      roundMatches.find(
-        (match) => !picks.some((pick) => pick.bracketId === bracketId && pick.matchId === match.id)
-      ) ?? roundMatches[0];
-    // Wait for the column expand/collapse transition (duration-300 on the cards)
-    // to finish before measuring. The cards animate their `top`, so reading the
-    // rect mid-flight would scroll to the card's old position and bury the target
-    // under the sticky header.
-    const timer = window.setTimeout(() => {
-      const matchEl = document.getElementById(`match-${target.id}`);
-      if (!matchEl) return;
-      const headerOffset = headerRef.current?.offsetHeight ?? 0;
-      const top = window.scrollY + matchEl.getBoundingClientRect().top - headerOffset - 12;
-      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
-    }, 340);
-    return () => window.clearTimeout(timer);
+    if (!roundMatches.length || !boardRef.current) return;
+    let targetIndex = roundMatches.findIndex(
+      (match) => !picks.some((pick) => pick.bracketId === bracketId && pick.matchId === match.id)
+    );
+    if (targetIndex < 0) targetIndex = 0;
+    // Compute the target's FINAL position from the layout model (getY) instead of
+    // reading the DOM. The cards animate their `top` (duration-300), so a rect
+    // read would be mid-flight. Computing it means we can scroll immediately —
+    // which also stops the page from drifting down on swipe momentum during a
+    // wait before we correct it.
+    const boardTopDoc = boardRef.current.getBoundingClientRect().top + window.scrollY;
+    const cardY = getY(focusedRoundNumber, targetIndex);
+    const headerOffset = headerRef.current?.offsetHeight ?? 0;
+    const top = boardTopDoc + cardY - headerOffset - 12;
+    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
     // Only react to round changes — not to each pick, which would yank the view
     // mid-pick. picks/bracketId are read at swipe time on purpose.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -339,7 +338,7 @@ export function BracketBoard({
   };
 
   const renderBoard = () => (
-    <div className="relative p-4" style={{ width: contentWidth, minHeight: contentHeight }}>
+    <div ref={boardRef} className="relative p-4" style={{ width: contentWidth, minHeight: contentHeight }}>
       <div
         className="absolute top-0 z-0 h-full bg-[#cdded0]"
         style={{
