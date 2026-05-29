@@ -6,7 +6,6 @@ import { AppFrame } from "@/components/AppFrame";
 import { BracketBoard } from "@/components/BracketBoard";
 import { PoolNav } from "@/components/PoolNav";
 import { getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
-import { clearCurrentUser } from "@/lib/current-user";
 import { isBracketComplete, pickWinner } from "@/lib/services/bracket-service";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import { useAutoSync } from "@/lib/use-auto-sync";
@@ -198,12 +197,6 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
     await persist("submitted");
   }
 
-  function signOut() {
-    clearCurrentUser();
-    window.location.href = "/";
-  }
-
-  const currentUser = getCurrentUserForState(state);
   const submitted = activeBracket.status === "submitted" || activeBracket.status === "locked";
   const submitLabel = submitted ? "Submitted" : "Submit";
   const canSaveDraft = !locked && saveStatus === "error";
@@ -213,18 +206,8 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
   return (
     <AppFrame compact>
       <main className="flex h-[100dvh] flex-col overflow-hidden px-2 pt-1 sm:px-3">
-        <div className="mb-1 flex shrink-0 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <PoolNav poolId={params.poolId} compact />
-          <div className="flex shrink-0 items-center justify-end gap-2">
-            <p className="max-w-[180px] truncate text-sm font-bold text-slate-600">Hi, {currentUser.displayName}</p>
-            <button
-              type="button"
-              onClick={signOut}
-              className="rounded-lg bg-ink px-3 py-2 text-xs font-bold text-white sm:text-sm"
-            >
-              Sign out
-            </button>
-          </div>
+        <div className="mb-1 shrink-0">
+          <PoolNav poolId={params.poolId} compact showAccount />
         </div>
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain">
           <div className="mb-1 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
