@@ -17,6 +17,7 @@ interface BracketBoardProps {
   mode: "real" | "picking" | "review";
   locked?: boolean;
   title?: string;
+  submitted?: boolean;
   highlightedMatchId?: string | null;
   pickedCount?: number;
   totalPicks?: number;
@@ -92,6 +93,7 @@ export function BracketBoard({
   mode,
   locked,
   title,
+  submitted = false,
   highlightedMatchId,
   pickedCount,
   totalPicks,
@@ -489,9 +491,13 @@ export function BracketBoard({
             {showScore ? (
               <span className="rounded-full bg-court-100 px-2 py-0.5 text-xs font-black text-court-700">{currentScore} pts</span>
             ) : null}
-            <p className="text-xs font-black text-ink">
-              {pickedCount ?? 0} of {totalPicks ?? matches.length} picks
-            </p>
+            {submitted ? (
+              <span className="rounded-full bg-court-700 px-2 py-0.5 text-xs font-black text-white">Submitted</span>
+            ) : (
+              <p className="text-xs font-black text-ink">
+                {pickedCount ?? 0} of {totalPicks ?? matches.length} picks
+              </p>
+            )}
           </div>
         </div>
         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-court-50">

@@ -7,6 +7,7 @@ import { BracketBoard } from "@/components/BracketBoard";
 import { PoolNav } from "@/components/PoolNav";
 import { getCurrentUserForState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
 import { isBracketComplete, pickWinner } from "@/lib/services/bracket-service";
+import { getSlamShortLabel } from "@/lib/services/bracket-shell-service";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import { useAutoSync } from "@/lib/use-auto-sync";
 import type { AppState, Bracket, BracketLiveScore } from "@/lib/types";
@@ -226,23 +227,12 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
               ))}
             </div>
           </div>
-          {!submitted && complete ? (
-            <div className="mb-2 flex items-center gap-2 rounded-lg border border-court-200 bg-court-50 px-3 py-2 text-sm font-bold text-court-900">
-              <CheckCircle2 size={18} />
-              All picks are in. Review your champion, then submit.
-            </div>
-          ) : null}
-          {submitted ? (
-            <div className="mb-2 flex items-center gap-2 rounded-lg border border-court-200 bg-court-50 px-3 py-2 text-sm font-bold text-court-900">
-              <CheckCircle2 size={18} />
-              Bracket submitted. Your picks are now read-only.
-            </div>
-          ) : null}
           <BracketBoard
             bracketId={activeBracket.id}
             mode={locked ? "review" : "picking"}
             locked={locked}
-            title={tournament.name}
+            title={getSlamShortLabel(tournament.slamType, tournament.year, tournament.gender)}
+            submitted={submitted}
             matches={matches}
             players={state.players}
             rounds={rounds}
