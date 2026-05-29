@@ -102,6 +102,15 @@ export function BracketBoard({
   const headerRef = useRef<HTMLDivElement | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
   const playerById = new Map(players.map((player) => [player.id, player]));
+  // Players who lost a real, completed match — i.e. are out of the draw. A pick
+  // of an eliminated player can never score, so we strike the name through and
+  // mark the pick dead (0) even before that pick's own match is played.
+  const eliminatedPlayerIds = new Set<string>();
+  for (const realMatch of matches) {
+    if (!realMatch.winnerPlayerId) continue;
+    if (realMatch.player1Id && realMatch.player1Id !== realMatch.winnerPlayerId) eliminatedPlayerIds.add(realMatch.player1Id);
+    if (realMatch.player2Id && realMatch.player2Id !== realMatch.winnerPlayerId) eliminatedPlayerIds.add(realMatch.player2Id);
+  }
   const sortedRounds = [...rounds].sort((a, b) => a.roundNumber - b.roundNumber);
   const finalRound = sortedRounds[sortedRounds.length - 1];
   const contentWidth = sortedRounds.length * cardWidth + Math.max(0, sortedRounds.length - 1) * columnGap + 32;
@@ -224,6 +233,9 @@ export function BracketBoard({
     const projected =
       mode === "real" ? { player1Id: match.player1Id, player2Id: match.player2Id } : getProjectedMatchPlayers(match, picks, matches, bracketId);
     const selected = picks.find((pick) => pick.bracketId === bracketId && pick.matchId === match.id);
+    // A pick is "dead" once the player you advanced here is out of the draw —
+    // it can never score, so show 0 even before this match itself is played.
+    const pickIsDead = Boolean(selected?.pickedWinnerPlayerId) && eliminatedPlayerIds.has(selected!.pickedWinnerPlayerId);
     const playerIds = [projected.player1Id, projected.player2Id];
     const displaysRealMatch =
       mode === "real" ||
@@ -272,19 +284,26 @@ export function BracketBoard({
             const isPicked = selected?.pickedWinnerPlayerId === playerId;
             const hasResult = displaysRealMatch && Boolean(match.winnerPlayerId);
             const isWinner = hasResult && Boolean(playerId) && match.winnerPlayerId === playerId;
-            const isLoser = hasResult && Boolean(player) && !isWinner;
+            // Out of the draw (lost a real match somewhere), regardless of whether
+            // this card is showing the real matchup or your projected one.
+            const isEliminated = Boolean(playerId) && eliminatedPlayerIds.has(playerId!);
+            // Strike a name through only where it represents NOT advancing: on a
+            // real matchup that's this match's loser; on your projected matchup
+            // it's a player already out of the draw (so can't really be here). A
+            // player who won this match isn't struck even if they lose later.
+            const showAsOut = displaysRealMatch ? hasResult && Boolean(player) && !isWinner : isEliminated;
             const disabled = !player || locked || mode !== "picking";
             const flag = countryCodeToFlagEmoji(player?.country);
-            // Your pick is marked by the left accent bar + PICK tag; its color is the
-            // ONLY thing encoding correctness (gray = pending, green = right, red =
-            // wrong). The actual winner is the gold trophy; the beaten player dims.
+            // Your pick's pill color encodes correctness (gray = pending, green =
+            // right, red = wrong). A pick is wrong as soon as the real match goes
+            // against you OR the player you advanced is already eliminated.
             const pickState: "none" | "pending" | "correct" | "wrong" = !isPicked
               ? "none"
-              : !hasResult
-                ? "pending"
-                : isWinner
-                  ? "correct"
-                  : "wrong";
+              : isWinner
+                ? "correct"
+                : hasResult || isEliminated
+                  ? "wrong"
+                  : "pending";
             return (
               <button
                 key={`${match.id}-${index}`}
@@ -295,7 +314,7 @@ export function BracketBoard({
                   pickState === "pending" && "bg-slate-100",
                   pickState === "correct" && "bg-court-100",
                   pickState === "wrong" && "bg-clay-100",
-                  isLoser && !isPicked && "opacity-60",
+                  showAsOut && !isPicked && "opacity-60",
                   !disabled && pickState === "none" && "hover:bg-slate-50"
                 )}
               >
@@ -311,7 +330,9 @@ export function BracketBoard({
                     className={cn(
                       "truncate text-sm",
                       isWinner ? "font-extrabold text-ink" : "font-bold text-ink",
-                      isLoser && !isPicked && "font-semibold text-slate-400 line-through"
+                      showAsOut && "line-through",
+                      showAsOut && !isPicked && "font-semibold text-slate-400",
+                      showAsOut && isPicked && "text-clay-700"
                     )}
                   >
                     {player?.name ?? "TBD"}
@@ -332,7 +353,7 @@ export function BracketBoard({
                     </span>
                   ) : null}
                   {player?.seed ? (
-                    <span className={cn("text-xs font-semibold", isLoser && !isPicked ? "text-slate-400" : "text-slate-500")}>[{player.seed}]</span>
+                    <span className={cn("text-xs font-semibold", showAsOut && !isPicked ? "text-slate-400" : "text-slate-500")}>[{player.seed}]</span>
                   ) : null}
                   {isWinner ? (
                     <Trophy size={14} className="text-amber-500" />
@@ -353,6 +374,8 @@ export function BracketBoard({
           <p className={cn("mt-0.5 text-[10px] font-black", selected.isCorrect ? "text-court-700" : "text-clay-700")}>
             {selected.isCorrect ? `+${selected.pointsAwarded}` : "0"} pts
           </p>
+        ) : pickIsDead ? (
+          <p className="mt-0.5 text-[10px] font-black text-clay-700">0 pts</p>
         ) : null}
       </article>
     );
