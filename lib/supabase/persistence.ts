@@ -1278,7 +1278,16 @@ export async function syncEspnLiveUpdatesInSupabase(input: {
     }
   }
 
-  const tournamentStatus: TournamentStatus = winnersApplied > 0 || matchesUpdated > 0 ? "in_progress" : tournament.status;
+  // Picking is commissioner-controlled (Admin lock/unlock). The results sync
+  // must not silently re-lock it: if picking is intentionally open, leave it
+  // open even as live results arrive. Otherwise advance to in_progress once
+  // results start flowing.
+  const tournamentStatus: TournamentStatus =
+    tournament.status === "picking_open"
+      ? "picking_open"
+      : winnersApplied > 0 || matchesUpdated > 0
+        ? "in_progress"
+        : tournament.status;
   throwIfError((await supabase.from("tournaments").update({
     status: tournamentStatus,
     last_synced_at: now
