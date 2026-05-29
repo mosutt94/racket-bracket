@@ -122,9 +122,9 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   }
 
   return (
-    <AppFrame>
+    <AppFrame compact>
       <main className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
-        <PoolNav poolId={activePool.id} isCommissioner={isCommissioner} />
+        <PoolNav poolId={activePool.id} showAccount isCommissioner={isCommissioner} />
         <div className="mb-4 mt-1">
           <p className="text-xs font-bold uppercase tracking-wide text-court-700 sm:text-sm">Commissioner dashboard</p>
           <h1 className="text-2xl font-black text-ink sm:text-3xl">{activePool.name}</h1>

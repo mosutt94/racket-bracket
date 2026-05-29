@@ -124,9 +124,9 @@ export default function MatchManagementPage({ params }: { params: { poolId: stri
   }
 
   return (
-    <AppFrame>
+    <AppFrame compact>
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <PoolNav poolId={params.poolId} isCommissioner={isPoolCommissioner(state, params.poolId)} />
+        <PoolNav poolId={params.poolId} showAccount isCommissioner={isPoolCommissioner(state, params.poolId)} />
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
             <p className="text-sm font-bold uppercase tracking-wide text-court-700">Commissioner bracket editor</p>

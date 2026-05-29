@@ -45,9 +45,9 @@ export default function PoolHomePage({ params }: { params: { poolId: string } })
   }
 
   return (
-    <AppFrame>
+    <AppFrame compact>
       <main className="mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
-        <PoolNav poolId={pool.id} isCommissioner={isPoolCommissioner(state, pool.id)} />
+        <PoolNav poolId={pool.id} showAccount isCommissioner={isPoolCommissioner(state, pool.id)} />
         <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr] lg:gap-5">
           <section className="rounded-xl border border-court-200 bg-white p-4 shadow-soft sm:p-6">
             <div className="flex items-start justify-between gap-3">

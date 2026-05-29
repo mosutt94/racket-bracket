@@ -24,9 +24,9 @@ export default function LeaderboardPage({ params }: { params: { poolId: string }
   const leaderboard = getLeaderboard(state, params.poolId, tournament.id);
 
   return (
-    <AppFrame>
+    <AppFrame compact>
       <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
-        <PoolNav poolId={params.poolId} isCommissioner={isPoolCommissioner(state, params.poolId)} />
+        <PoolNav poolId={params.poolId} showAccount isCommissioner={isPoolCommissioner(state, params.poolId)} />
         <h1 className="text-2xl font-black text-ink sm:text-3xl">Leaderboard</h1>
         <div className="mt-5 overflow-hidden rounded-xl border border-court-200 bg-white shadow-sm">
           {leaderboard.map((row, index) => (
