@@ -134,13 +134,13 @@ export function getSlamDisplayName(slamType: SlamType, year: number, gender: Gen
   return `${slamName[slamType]} ${year} ${genderLabel}`;
 }
 
-/** Compact label that fits a header without truncating, e.g. "French Open '26 · M". */
+/** Compact label that fits a header without truncating, e.g. "French '26 · M". */
 export function getSlamShortLabel(slamType: SlamType, year: number, gender: Gender): string {
   const slamName: Record<SlamType, string> = {
-    australian_open: "Australian Open",
-    french_open: "French Open",
-    wimbledon: "Wimbledon",
-    us_open: "US Open"
+    australian_open: "AUS",
+    french_open: "French",
+    wimbledon: "Wim",
+    us_open: "US"
   };
   return `${slamName[slamType]} '${String(year).slice(-2)} · ${gender === "women" ? "W" : "M"}`;
 }

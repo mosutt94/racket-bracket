@@ -116,14 +116,27 @@ export function BracketBoard({
   const matchById = new Map(matches.map((matchItem) => [matchItem.id, matchItem]));
   const roundPointsByNumber = new Map(rounds.map((roundItem) => [roundItem.roundNumber, roundItem.pointsPerCorrectPick]));
   const hasResults = matches.some((matchItem) => Boolean(matchItem.winnerPlayerId));
-  // Live total from the user's own picks (mirrors each card's points), so the
-  // score updates the instant they pick — no server rescore needed.
-  const currentScore = picks.reduce((sum, pick) => {
-    if (pick.bracketId !== bracketId) return sum;
+  // Current = points already locked in (a pick whose real match you won).
+  // Potential = current + every pick still alive (its player not eliminated and
+  // its match undecided) — the ceiling if everything still standing comes in.
+  // When a deep pick (e.g. your champion) is eliminated, all of that player's
+  // projected picks drop out of potential at once.
+  let currentScore = 0;
+  let potentialScore = 0;
+  for (const pick of picks) {
+    if (pick.bracketId !== bracketId || !pick.pickedWinnerPlayerId) continue;
     const pickMatch = matchById.get(pick.matchId);
-    if (!pickMatch?.winnerPlayerId || pick.pickedWinnerPlayerId !== pickMatch.winnerPlayerId) return sum;
-    return sum + (roundPointsByNumber.get(pickMatch.roundNumber) ?? 0);
-  }, 0);
+    if (!pickMatch) continue;
+    const pts = roundPointsByNumber.get(pickMatch.roundNumber) ?? 0;
+    if (pickMatch.winnerPlayerId) {
+      if (pick.pickedWinnerPlayerId === pickMatch.winnerPlayerId) {
+        currentScore += pts;
+        potentialScore += pts;
+      }
+    } else if (!eliminatedPlayerIds.has(pick.pickedWinnerPlayerId)) {
+      potentialScore += pts;
+    }
+  }
   const showScore = mode !== "real" && hasResults;
   const sortedRounds = [...rounds].sort((a, b) => a.roundNumber - b.roundNumber);
   const finalRound = sortedRounds[sortedRounds.length - 1];
@@ -489,7 +502,10 @@ export function BracketBoard({
           )}
           <div className="flex shrink-0 items-center gap-2">
             {showScore ? (
-              <span className="rounded-full bg-court-100 px-2 py-0.5 text-xs font-black text-court-700">{currentScore} pts</span>
+              <span className="rounded-full bg-court-50 px-2 py-0.5 text-xs font-black" title="Current score / potential if all remaining picks hit">
+                <span className="text-court-700">{currentScore}</span>
+                <span className="text-slate-400">/{potentialScore} pts</span>
+              </span>
             ) : null}
             {submitted ? (
               <span className="rounded-full bg-court-700 px-2 py-0.5 text-xs font-black text-white">Submitted</span>
