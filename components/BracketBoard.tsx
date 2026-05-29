@@ -111,6 +111,18 @@ export function BracketBoard({
     if (realMatch.player1Id && realMatch.player1Id !== realMatch.winnerPlayerId) eliminatedPlayerIds.add(realMatch.player1Id);
     if (realMatch.player2Id && realMatch.player2Id !== realMatch.winnerPlayerId) eliminatedPlayerIds.add(realMatch.player2Id);
   }
+  const matchById = new Map(matches.map((matchItem) => [matchItem.id, matchItem]));
+  const roundPointsByNumber = new Map(rounds.map((roundItem) => [roundItem.roundNumber, roundItem.pointsPerCorrectPick]));
+  const hasResults = matches.some((matchItem) => Boolean(matchItem.winnerPlayerId));
+  // Live total from the user's own picks (mirrors each card's points), so the
+  // score updates the instant they pick — no server rescore needed.
+  const currentScore = picks.reduce((sum, pick) => {
+    if (pick.bracketId !== bracketId) return sum;
+    const pickMatch = matchById.get(pick.matchId);
+    if (!pickMatch?.winnerPlayerId || pick.pickedWinnerPlayerId !== pickMatch.winnerPlayerId) return sum;
+    return sum + (roundPointsByNumber.get(pickMatch.roundNumber) ?? 0);
+  }, 0);
+  const showScore = mode !== "real" && hasResults;
   const sortedRounds = [...rounds].sort((a, b) => a.roundNumber - b.roundNumber);
   const finalRound = sortedRounds[sortedRounds.length - 1];
   const contentWidth = sortedRounds.length * cardWidth + Math.max(0, sortedRounds.length - 1) * columnGap + 32;
@@ -473,9 +485,14 @@ export function BracketBoard({
           ) : (
             <p className="text-xs font-black uppercase text-court-700">Progress</p>
           )}
-          <p className="shrink-0 text-xs font-black text-ink">
-            {pickedCount ?? 0} of {totalPicks ?? matches.length} picks
-          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            {showScore ? (
+              <span className="rounded-full bg-court-100 px-2 py-0.5 text-xs font-black text-court-700">{currentScore} pts</span>
+            ) : null}
+            <p className="text-xs font-black text-ink">
+              {pickedCount ?? 0} of {totalPicks ?? matches.length} picks
+            </p>
+          </div>
         </div>
         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-court-50">
           <div className="h-full rounded-full bg-court-700" style={{ width: `${progressPercent}%` }} />
