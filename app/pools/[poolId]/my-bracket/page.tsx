@@ -109,7 +109,6 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
   const locked = activeBracket.status !== "draft" || tournament.status !== "picking_open";
   const complete = isBracketComplete(activeBracket.id, matches, state.bracketPicks);
   const pickedCount = matches.filter((match) => state.bracketPicks.some((pick) => pick.bracketId === activeBracket.id && pick.matchId === match.id)).length;
-  const remainingPicks = Math.max(0, matches.length - pickedCount);
   const sortedMatches = [...matches].sort((a, b) => a.roundNumber - b.roundNumber || a.matchNumber - b.matchNumber);
   const nextMissingMatch = sortedMatches.find((match) => !state.bracketPicks.some((pick) => pick.bracketId === activeBracket.id && pick.matchId === match.id));
   const roundProgress = [...rounds]
@@ -206,7 +205,7 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
 
   const currentUser = getCurrentUserForState(state);
   const submitted = activeBracket.status === "submitted" || activeBracket.status === "locked";
-  const submitLabel = submitted ? "Submitted" : remainingPicks > 0 ? `Submit (${remainingPicks} left)` : "Submit";
+  const submitLabel = submitted ? "Submitted" : "Submit";
   const canSaveDraft = !locked && saveStatus === "error";
   const saveLabel = saveStatus === "saving" || dirty ? "Saving..." : saveStatus === "error" ? "Retry save" : "Saved";
   const SaveButtonIcon = dirty || saveStatus === "saving" || saveStatus === "error" ? Save : CheckCircle2;
@@ -291,11 +290,10 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
                 <button
                   type="button"
                   onClick={jumpToNextMissingPick}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ink px-3 py-3 text-xs font-bold text-white"
-                  aria-label="Jump to next missing pick"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ink px-3 py-3 text-sm font-bold text-white"
+                  aria-label="Jump to next pick"
                 >
-                  <LocateFixed size={16} />
-                  <span className="hidden sm:inline">Next missing</span>
+                  <LocateFixed size={16} /> Next Pick
                 </button>
               ) : null}
               <div className="flex-1" />
