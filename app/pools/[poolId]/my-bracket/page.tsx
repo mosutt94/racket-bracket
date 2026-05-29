@@ -255,7 +255,7 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
           />
         </div>
         {!submitted ? (
-          <div className="shrink-0 border-t border-court-200 bg-white px-3 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.12)]">
+          <div className="shrink-0 border-t border-court-200 bg-white px-2 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.12)] sm:px-3">
             <div className="mx-auto flex max-w-5xl items-center gap-2">
               {nextMissingMatch ? (
                 <button
@@ -267,21 +267,22 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
                   <LocateFixed size={16} /> Next Pick
                 </button>
               ) : null}
-              <div className="flex-1" />
-              <button
-                onClick={() => persist("draft")}
-                disabled={!canSaveDraft}
-                className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-court-200 bg-white px-4 py-3 text-sm font-bold text-court-800 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
-              >
-                <SaveButtonIcon size={18} /> {saveLabel}
-              </button>
-              <button
-                onClick={submit}
-                disabled={!complete || locked}
-                className="shrink-0 rounded-lg bg-court-700 px-5 py-3 text-sm font-black text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {submitLabel}
-              </button>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={() => persist("draft")}
+                  disabled={!canSaveDraft}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-court-200 bg-white px-3 py-3 text-sm font-bold text-court-800 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                >
+                  <SaveButtonIcon size={18} /> <span className="max-[359px]:hidden">{saveLabel}</span>
+                </button>
+                <button
+                  onClick={submit}
+                  disabled={!complete || locked}
+                  className="shrink-0 rounded-lg bg-court-700 px-4 py-3 text-sm font-black text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {submitLabel}
+                </button>
+              </div>
             </div>
           </div>
         ) : null}
