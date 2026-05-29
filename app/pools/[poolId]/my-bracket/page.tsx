@@ -210,19 +210,6 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
           <PoolNav poolId={params.poolId} compact showAccount isCommissioner={isPoolCommissioner(state, params.poolId)} />
         </div>
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain">
-          <div className="mb-1 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <p className="text-xs font-bold uppercase tracking-wide text-court-700">My bracket</p>
-                <p className="text-xs font-semibold text-slate-600">Status: {activeBracket.status}</p>
-                {saveStatus === "saved" ? <p className="text-xs font-semibold text-court-700">Saved</p> : null}
-                {saveStatus === "submitted" ? <p className="text-xs font-semibold text-court-700">Submitted</p> : null}
-                {saveStatus === "error" ? <p className="text-xs font-semibold text-clay-700">Save failed</p> : null}
-                {!submitted ? <p className="text-xs font-semibold text-slate-600">{pickedCount} of {matches.length} picks made</p> : null}
-              </div>
-              <h1 className="truncate text-lg font-black text-ink sm:text-xl">{tournament.name}</h1>
-            </div>
-          </div>
           <div className="mb-2 hidden rounded-lg border border-court-200 bg-white p-2 shadow-sm lg:block">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
               {roundProgress.map(({ round, picked, total }) => (
@@ -255,6 +242,7 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
             bracketId={activeBracket.id}
             mode={locked ? "review" : "picking"}
             locked={locked}
+            title={tournament.name}
             matches={matches}
             players={state.players}
             rounds={rounds}

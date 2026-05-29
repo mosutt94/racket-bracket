@@ -16,6 +16,7 @@ interface BracketBoardProps {
   picks?: BracketPick[];
   mode: "real" | "picking" | "review";
   locked?: boolean;
+  title?: string;
   highlightedMatchId?: string | null;
   pickedCount?: number;
   totalPicks?: number;
@@ -90,6 +91,7 @@ export function BracketBoard({
   picks = [],
   mode,
   locked,
+  title,
   highlightedMatchId,
   pickedCount,
   totalPicks,
@@ -442,8 +444,12 @@ export function BracketBoard({
     <div className="rounded-xl border border-[#bccfbe] bg-[#dde7dd] shadow-inner">
       <div ref={headerRef} className="sticky top-0 z-30 border-b border-slate-200 bg-white px-4 py-2">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-black uppercase text-court-700">Progress</p>
-          <p className="text-xs font-black text-ink">
+          {title ? (
+            <p className="min-w-0 truncate text-sm font-black text-ink">{title}</p>
+          ) : (
+            <p className="text-xs font-black uppercase text-court-700">Progress</p>
+          )}
+          <p className="shrink-0 text-xs font-black text-ink">
             {pickedCount ?? 0} of {totalPicks ?? matches.length} picks
           </p>
         </div>
