@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Save } from "lucide-react";
+import { CheckCircle2, LocateFixed, Save } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { BracketBoard } from "@/components/BracketBoard";
@@ -281,22 +281,24 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
             pickedCount={pickedCount}
             totalPicks={matches.length}
             liveScores={liveScores}
-            nextMissingAvailable={!submitted && Boolean(nextMissingMatch)}
-            onNextMissing={jumpToNextMissingPick}
             onPick={choose}
           />
         </div>
         {!submitted ? (
           <div className="shrink-0 border-t border-court-200 bg-white px-3 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.12)]">
-            <div className="mx-auto flex max-w-5xl items-center gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-black text-ink">
-                  {complete ? "All picks are in" : `${remainingPicks} picks left`}
-                </p>
-                <p className="truncate text-xs font-semibold text-slate-500">
-                  {complete ? "Review your champion, then submit." : `${pickedCount} of ${matches.length} picks made`}
-                </p>
-              </div>
+            <div className="mx-auto flex max-w-5xl items-center gap-2">
+              {nextMissingMatch ? (
+                <button
+                  type="button"
+                  onClick={jumpToNextMissingPick}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ink px-3 py-3 text-xs font-bold text-white"
+                  aria-label="Jump to next missing pick"
+                >
+                  <LocateFixed size={16} />
+                  <span className="hidden sm:inline">Next missing</span>
+                </button>
+              ) : null}
+              <div className="flex-1" />
               <button
                 onClick={() => persist("draft")}
                 disabled={!canSaveDraft}

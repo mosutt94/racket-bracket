@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, CircleDot, LocateFixed, Trophy, X } from "lucide-react";
+import { Check, CircleDot, Trophy, X } from "lucide-react";
 import { getProjectedMatchPlayers } from "@/lib/services/bracket-service";
 import { countryCodeToFlagEmoji } from "@/lib/country-flags";
 import type { BracketLiveScore, BracketPick, Match, Player, ProviderMatchStatus, TournamentRound } from "@/lib/types";
@@ -20,8 +20,6 @@ interface BracketBoardProps {
   pickedCount?: number;
   totalPicks?: number;
   liveScores?: Record<string, BracketLiveScore>;
-  nextMissingAvailable?: boolean;
-  onNextMissing?: () => void;
   onPick?: (matchId: string, playerId: string) => void;
 }
 
@@ -96,8 +94,6 @@ export function BracketBoard({
   pickedCount,
   totalPicks,
   liveScores,
-  nextMissingAvailable,
-  onNextMissing,
   onPick
 }: BracketBoardProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -442,54 +438,20 @@ export function BracketBoard({
     </div>
   );
 
-  const renderRoundPreview = (roundNumber: number, isActive: boolean) => {
-    const lineCount = Math.max(1, Math.min(8, Math.ceil(9 - roundNumber)));
-    return (
-      <span
-        className={cn(
-          "mt-2 flex h-14 w-full max-w-14 flex-col justify-center rounded-lg px-2 transition sm:max-w-20",
-          isActive ? "bg-[#1a4d3a] shadow-sm" : "bg-transparent"
-        )}
-        aria-hidden="true"
-      >
-        {Array.from({ length: lineCount }).map((_, index) => (
-          <span
-            key={index}
-            className={cn("mb-1 block h-0.5 w-full rounded-full last:mb-0", isActive ? "bg-white/80" : "bg-[#c8d3c9]")}
-          />
-        ))}
-      </span>
-    );
-  };
-
   return (
     <div className="rounded-xl border border-[#bccfbe] bg-[#dde7dd] shadow-inner">
-      <div ref={headerRef} className="sticky top-0 z-30 border-b border-slate-200 bg-white px-4 py-3">
-        <div className="grid gap-1.5">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-black uppercase text-court-700">Progress</p>
-            <p className="text-sm font-black text-ink">
-              {pickedCount ?? 0} of {totalPicks ?? matches.length} picks
-            </p>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-court-50">
-            <div className="h-full rounded-full bg-court-700" style={{ width: `${progressPercent}%` }} />
-          </div>
+      <div ref={headerRef} className="sticky top-0 z-30 border-b border-slate-200 bg-white px-4 py-2">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-black uppercase text-court-700">Progress</p>
+          <p className="text-xs font-black text-ink">
+            {pickedCount ?? 0} of {totalPicks ?? matches.length} picks
+          </p>
         </div>
-        <div className="mt-2 flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            {nextMissingAvailable ? (
-              <button
-                type="button"
-                onClick={onNextMissing}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ink px-3 py-2 text-xs font-bold text-white"
-              >
-                <LocateFixed size={14} /> Next missing
-              </button>
-            ) : null}
-          </div>
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-court-50">
+          <div className="h-full rounded-full bg-court-700" style={{ width: `${progressPercent}%` }} />
         </div>
-        <div className="mt-3 grid grid-cols-7 gap-1 overflow-hidden">
+        {/* Compact round selector — tap to jump/focus a round. */}
+        <div className="mt-2 grid grid-cols-7 gap-1">
           {sortedRounds.map((round) => {
             const isActive = round.roundNumber === focusedRoundNumber;
             return (
@@ -498,13 +460,14 @@ export function BracketBoard({
                 type="button"
                 onClick={() => focusRound(round.roundNumber)}
                 className={cn(
-                  "flex min-w-0 flex-col items-center overflow-hidden rounded-lg py-1 text-xs font-black transition",
-                  isActive ? "text-[#111827]" : "text-[#a2a6aa] hover:bg-[#f3f6f4] hover:text-[#111827]"
+                  "min-w-0 rounded-md py-1.5 text-xs font-black transition",
+                  isActive
+                    ? "bg-[#1a4d3a] text-white shadow-sm"
+                    : "bg-court-50 text-slate-500 hover:bg-court-100 hover:text-ink"
                 )}
                 aria-label={`Focus ${round.roundName}`}
               >
-                <span>{getRoundLabel(round.roundNumber)}</span>
-                {renderRoundPreview(round.roundNumber, isActive)}
+                {getRoundLabel(round.roundNumber)}
               </button>
             );
           })}
