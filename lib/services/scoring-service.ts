@@ -63,17 +63,57 @@ export function recalculateScores(state: AppState, tournamentId: string): AppSta
 
 export function getLeaderboard(state: AppState, poolId: string, tournamentId: string) {
   const members = state.poolMembers.filter((member) => member.poolId === poolId);
+  const tournamentMatches = state.matches.filter((match) => match.tournamentId === tournamentId);
+  const matchById = new Map(tournamentMatches.map((match) => [match.id, match]));
+  const roundPoints = new Map(
+    state.rounds
+      .filter((round) => round.tournamentId === tournamentId)
+      .map((round) => [round.roundNumber, round.pointsPerCorrectPick])
+  );
+  // Players out of the draw (lost a completed match) — their picks can't score.
+  const eliminated = new Set<string>();
+  for (const match of tournamentMatches) {
+    if (!match.winnerPlayerId) continue;
+    if (match.player1Id && match.player1Id !== match.winnerPlayerId) eliminated.add(match.player1Id);
+    if (match.player2Id && match.player2Id !== match.winnerPlayerId) eliminated.add(match.player2Id);
+  }
+  const picksByBracket = new Map<string, BracketPick[]>();
+  for (const pick of state.bracketPicks) {
+    const arr = picksByBracket.get(pick.bracketId);
+    if (arr) arr.push(pick);
+    else picksByBracket.set(pick.bracketId, [pick]);
+  }
+
   return members
     .map((member) => {
       const profile = state.profiles.find((item) => item.id === member.userId);
       const bracket = state.brackets.find(
         (item) => item.poolId === poolId && item.tournamentId === tournamentId && item.userId === member.userId
       );
+      // current = points locked in; potential = current + every pick still alive
+      // (player not eliminated, match undecided). Mirrors the bracket page.
+      let score = 0;
+      let potentialScore = 0;
+      for (const pick of bracket ? picksByBracket.get(bracket.id) ?? [] : []) {
+        if (!pick.pickedWinnerPlayerId) continue;
+        const match = matchById.get(pick.matchId);
+        if (!match) continue;
+        const pts = roundPoints.get(match.roundNumber) ?? 0;
+        if (match.winnerPlayerId) {
+          if (pick.pickedWinnerPlayerId === match.winnerPlayerId) {
+            score += pts;
+            potentialScore += pts;
+          }
+        } else if (!eliminated.has(pick.pickedWinnerPlayerId)) {
+          potentialScore += pts;
+        }
+      }
       return {
         userId: member.userId,
         displayName: profile?.displayName ?? "Unknown player",
         role: member.role,
-        score: bracket?.totalScore ?? 0,
+        score,
+        potentialScore,
         bracketStatus: bracket?.status ?? "draft"
       };
     })
