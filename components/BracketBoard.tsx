@@ -233,9 +233,20 @@ export function BracketBoard({
     const projected =
       mode === "real" ? { player1Id: match.player1Id, player2Id: match.player2Id } : getProjectedMatchPlayers(match, picks, matches, bracketId);
     const selected = picks.find((pick) => pick.bracketId === bracketId && pick.matchId === match.id);
-    // A pick is "dead" once the player you advanced here is out of the draw —
-    // it can never score, so show 0 even before this match itself is played.
-    const pickIsDead = Boolean(selected?.pickedWinnerPlayerId) && eliminatedPlayerIds.has(selected!.pickedWinnerPlayerId);
+    const pickedWinnerId = selected?.pickedWinnerPlayerId ?? null;
+    const roundPoints = rounds.find((roundItem) => roundItem.roundNumber === match.roundNumber)?.pointsPerCorrectPick ?? 0;
+    // Score the pick client-side against the real result so it reflects the
+    // instant you pick — no waiting for a server rescore. Correct = the round's
+    // points; a beaten pick OR one whose player is already out of the draw = 0.
+    const pickOutcome: "none" | "pending" | "correct" | "wrong" = !pickedWinnerId
+      ? "none"
+      : match.winnerPlayerId
+        ? pickedWinnerId === match.winnerPlayerId
+          ? "correct"
+          : "wrong"
+        : eliminatedPlayerIds.has(pickedWinnerId)
+          ? "wrong"
+          : "pending";
     const playerIds = [projected.player1Id, projected.player2Id];
     const displaysRealMatch =
       mode === "real" ||
@@ -294,16 +305,8 @@ export function BracketBoard({
             const showAsOut = displaysRealMatch ? hasResult && Boolean(player) && !isWinner : isEliminated;
             const disabled = !player || locked || mode !== "picking";
             const flag = countryCodeToFlagEmoji(player?.country);
-            // Your pick's pill color encodes correctness (gray = pending, green =
-            // right, red = wrong). A pick is wrong as soon as the real match goes
-            // against you OR the player you advanced is already eliminated.
-            const pickState: "none" | "pending" | "correct" | "wrong" = !isPicked
-              ? "none"
-              : isWinner
-                ? "correct"
-                : hasResult || isEliminated
-                  ? "wrong"
-                  : "pending";
+            // Your pick's pill color mirrors the pick outcome computed above.
+            const pickState: "none" | "pending" | "correct" | "wrong" = isPicked ? pickOutcome : "none";
             return (
               <button
                 key={`${match.id}-${index}`}
@@ -370,11 +373,9 @@ export function BracketBoard({
         ) : displaysRealMatch && match.scoreSummary ? (
           <p className="mt-1 truncate text-[10px] font-semibold text-slate-500">{match.scoreSummary}</p>
         ) : null}
-        {selected?.isCorrect !== null && selected?.isCorrect !== undefined ? (
-          <p className={cn("mt-0.5 text-[10px] font-black", selected.isCorrect ? "text-court-700" : "text-clay-700")}>
-            {selected.isCorrect ? `+${selected.pointsAwarded}` : "0"} pts
-          </p>
-        ) : pickIsDead ? (
+        {pickOutcome === "correct" ? (
+          <p className="mt-0.5 text-[10px] font-black text-court-700">+{roundPoints} pts</p>
+        ) : pickOutcome === "wrong" ? (
           <p className="mt-0.5 text-[10px] font-black text-clay-700">0 pts</p>
         ) : null}
       </article>
