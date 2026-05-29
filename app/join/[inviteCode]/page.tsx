@@ -41,7 +41,7 @@ export default function InviteJoinPage({ params }: { params: { inviteCode: strin
       <main className="mx-auto flex min-h-[calc(100vh-65px)] max-w-xl items-center px-4 py-10">
         <section className="w-full rounded-xl border border-court-200 bg-white p-6 shadow-soft">
           <p className="text-sm font-black uppercase tracking-wide text-court-700">Bracket invite</p>
-          <h1 className="mt-2 text-3xl font-black text-ink">Join Racket Bracket</h1>
+          <h1 className="mt-2 text-2xl font-black text-ink sm:text-3xl">Join Racket Bracket</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Enter your email and display name, then make your picks. Invite code <span className="font-black text-ink">{inviteCode}</span>.
           </p>

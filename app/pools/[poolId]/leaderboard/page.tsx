@@ -27,14 +27,14 @@ export default function LeaderboardPage({ params }: { params: { poolId: string }
     <AppFrame>
       <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
         <PoolNav poolId={params.poolId} isCommissioner={isPoolCommissioner(state, params.poolId)} />
-        <h1 className="text-3xl font-black text-ink">Leaderboard</h1>
+        <h1 className="text-2xl font-black text-ink sm:text-3xl">Leaderboard</h1>
         <div className="mt-5 overflow-hidden rounded-xl border border-court-200 bg-white shadow-sm">
           {leaderboard.map((row, index) => (
-            <div key={row.userId} className="grid grid-cols-[52px_1fr_90px] items-center border-b border-slate-100 px-4 py-4 last:border-b-0">
+            <div key={row.userId} className="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0">
               <span className="text-sm font-black text-slate-500">{index + 1}</span>
-              <span>
-                <span className="block font-bold">{row.displayName}</span>
-                <span className="text-xs text-slate-500">{row.role} · {row.bracketStatus}</span>
+              <span className="min-w-0">
+                <span className="block truncate font-bold">{row.displayName}</span>
+                <span className="block truncate text-xs text-slate-500">{row.role} · {row.bracketStatus}</span>
               </span>
               <span className="text-right text-xl font-black text-court-700">{row.score}</span>
             </div>
