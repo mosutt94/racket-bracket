@@ -23,6 +23,15 @@ select {
   font: inherit;
 }
 
+/* Prevent iOS Safari from auto-zooming when a form control is focused — it
+   zooms in whenever the focused field's font-size is below 16px, and that zoom
+   then sticks across client-side navigation (e.g. join form -> bracket). */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
 .bracket-scroll {
   overflow-x: auto;
   overflow-y: visible;
