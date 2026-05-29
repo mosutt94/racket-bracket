@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { BracketBoard } from "@/components/BracketBoard";
 import { PoolNav } from "@/components/PoolNav";
-import { getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
+import { getCurrentUserForState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
 import { isBracketComplete, pickWinner } from "@/lib/services/bracket-service";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import { useAutoSync } from "@/lib/use-auto-sync";
@@ -207,7 +207,7 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
     <AppFrame compact>
       <main className="flex h-[100dvh] flex-col overflow-hidden px-2 pt-1 sm:px-3">
         <div className="mb-1 shrink-0">
-          <PoolNav poolId={params.poolId} compact showAccount />
+          <PoolNav poolId={params.poolId} compact showAccount isCommissioner={isPoolCommissioner(state, params.poolId)} />
         </div>
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain">
           <div className="mb-1 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">

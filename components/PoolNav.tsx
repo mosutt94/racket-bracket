@@ -9,11 +9,13 @@ import { cn } from "@/lib/utils";
 export function PoolNav({
   poolId,
   compact = false,
-  showAccount = false
+  showAccount = false,
+  isCommissioner = false
 }: {
   poolId: string;
   compact?: boolean;
   showAccount?: boolean;
+  isCommissioner?: boolean;
 }) {
   const pathname = usePathname();
   const [displayName, setDisplayName] = useState<string | null>(null);
@@ -27,13 +29,13 @@ export function PoolNav({
     window.location.href = "/";
   }
 
+  // Admin is commissioner-only; scoring config now lives inside the Admin page.
   const links: Array<[string, string]> = [
     ["Home", `/pools/${poolId}`],
     ["Tournament", `/pools/${poolId}/bracket`],
     ["My Bracket", `/pools/${poolId}/my-bracket`],
     ["Leaderboard", `/pools/${poolId}/leaderboard`],
-    ["Admin", `/pools/${poolId}/admin`],
-    ["Scoring", `/pools/${poolId}/settings`]
+    ...(isCommissioner ? ([["Admin", `/pools/${poolId}/admin`]] as Array<[string, string]>) : [])
   ];
 
   return (

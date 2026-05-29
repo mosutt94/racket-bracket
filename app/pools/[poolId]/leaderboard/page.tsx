@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { PoolNav } from "@/components/PoolNav";
 import { getLeaderboard } from "@/lib/services/scoring-service";
-import { loadAppState } from "@/lib/app-state-client";
+import { isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import { useAutoSync } from "@/lib/use-auto-sync";
 import type { AppState } from "@/lib/types";
@@ -26,7 +26,7 @@ export default function LeaderboardPage({ params }: { params: { poolId: string }
   return (
     <AppFrame>
       <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
-        <PoolNav poolId={params.poolId} />
+        <PoolNav poolId={params.poolId} isCommissioner={isPoolCommissioner(state, params.poolId)} />
         <h1 className="text-3xl font-black text-ink">Leaderboard</h1>
         <div className="mt-5 overflow-hidden rounded-xl border border-court-200 bg-white shadow-sm">
           {leaderboard.map((row, index) => (

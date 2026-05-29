@@ -4,7 +4,7 @@ import { RotateCcw, Save, Trophy } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { PoolNav } from "@/components/PoolNav";
-import { getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
+import { getCurrentUserForState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import type { AppState, Match, Player } from "@/lib/types";
 
@@ -126,7 +126,7 @@ export default function MatchManagementPage({ params }: { params: { poolId: stri
   return (
     <AppFrame>
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <PoolNav poolId={params.poolId} />
+        <PoolNav poolId={params.poolId} isCommissioner={isPoolCommissioner(state, params.poolId)} />
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
             <p className="text-sm font-bold uppercase tracking-wide text-court-700">Commissioner bracket editor</p>
