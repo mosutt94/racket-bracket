@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, CircleDot, Trophy, X } from "lucide-react";
+import { Check, CircleDot, Trophy, X } from "lucide-react";
 import { getProjectedMatchPlayers } from "@/lib/services/bracket-service";
 import { countryCodeToFlagEmoji } from "@/lib/country-flags";
 import type { BracketLiveScore, BracketPick, Match, Player, ProviderMatchStatus, TournamentRound } from "@/lib/types";
@@ -139,8 +139,6 @@ export function BracketBoard({
   }
   const showScore = mode !== "real" && hasResults;
   const sortedRounds = [...rounds].sort((a, b) => a.roundNumber - b.roundNumber);
-  const firstRoundNumber = sortedRounds[0]?.roundNumber ?? 1;
-  const lastRoundNumber = sortedRounds[sortedRounds.length - 1]?.roundNumber ?? 1;
   const finalRound = sortedRounds[sortedRounds.length - 1];
   const contentWidth = sortedRounds.length * cardWidth + Math.max(0, sortedRounds.length - 1) * columnGap + 32;
   const progressPercent = totalPicks ? Math.min(100, Math.round(((pickedCount ?? 0) / totalPicks) * 100)) : 0;
@@ -186,6 +184,50 @@ export function BracketBoard({
         setFocusedRoundNumber(target.roundNumber);
       }
     }, 90);
+  };
+
+  // Drag-to-pan: let mouse users grab the bracket and scroll it horizontally,
+  // like dragging a map. Touch keeps native scroll/snap (we only act on mouse).
+  // A small movement threshold separates a pan from a pick click, and we swallow
+  // the click that ends a real drag so picking still works on My Bracket.
+  const dragRef = useRef<{ startX: number; startScroll: number; moved: boolean } | null>(null);
+  const suppressClickRef = useRef(false);
+
+  const onBoardPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "mouse" || event.button !== 0) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    suppressClickRef.current = false;
+    dragRef.current = { startX: event.clientX, startScroll: el.scrollLeft, moved: false };
+  };
+
+  const onBoardPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    const el = scrollRef.current;
+    if (!drag || !el) return;
+    const dx = event.clientX - drag.startX;
+    if (!drag.moved && Math.abs(dx) < 5) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      el.setPointerCapture?.(event.pointerId);
+    }
+    suppressClickRef.current = true;
+    el.scrollLeft = drag.startScroll - dx;
+  };
+
+  const onBoardPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const el = scrollRef.current;
+    if (el?.hasPointerCapture?.(event.pointerId)) el.releasePointerCapture(event.pointerId);
+    dragRef.current = null;
+  };
+
+  // A drag ends with a click event; swallow it (capture phase) so a pan doesn't
+  // register as a pick. Reset the flag either way.
+  const onBoardClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!suppressClickRef.current) return;
+    suppressClickRef.current = false;
+    event.preventDefault();
+    event.stopPropagation();
   };
 
   const getRoundMatches = (roundNumber: number) =>
@@ -347,6 +389,7 @@ export function BracketBoard({
                   pickState === "correct" && "bg-court-100",
                   pickState === "wrong" && "bg-clay-100",
                   showAsOut && !isPicked && "opacity-60",
+                  !disabled && "cursor-pointer",
                   !disabled && pickState === "none" && "hover:bg-slate-50"
                 )}
               >
@@ -521,54 +564,40 @@ export function BracketBoard({
         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-court-50">
           <div className="h-full rounded-full bg-court-700" style={{ width: `${progressPercent}%` }} />
         </div>
-        {/* Round selector — tap a round to jump, or use the arrows to step across. */}
-        <div className="mt-2 flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => focusRound(focusedRoundNumber - 1)}
-            disabled={focusedRoundNumber <= firstRoundNumber}
-            aria-label="Previous round"
-            className="hidden shrink-0 items-center justify-center rounded-md border border-court-200 bg-white p-1 text-court-700 transition hover:bg-court-100 disabled:opacity-30 sm:flex"
-          >
-            <ChevronLeft size={16} />
-          </button>
-          <div className="grid flex-1 grid-cols-7 gap-1">
-            {sortedRounds.map((round) => {
-              const isActive = round.roundNumber === focusedRoundNumber;
-              return (
-                <button
-                  key={round.id}
-                  type="button"
-                  onClick={() => focusRound(round.roundNumber)}
-                  aria-pressed={isActive}
-                  className={cn(
-                    "min-w-0 rounded-md border py-1.5 text-xs font-black transition",
-                    isActive
-                      ? "border-[#1a4d3a] bg-[#1a4d3a] text-white shadow-sm"
-                      : "border-court-200 bg-court-50 text-court-800 hover:border-court-300 hover:bg-court-100"
-                  )}
-                  aria-label={`Focus ${round.roundName}`}
-                >
-                  {getRoundLabel(round.roundNumber)}
-                </button>
-              );
-            })}
-          </div>
-          <button
-            type="button"
-            onClick={() => focusRound(focusedRoundNumber + 1)}
-            disabled={focusedRoundNumber >= lastRoundNumber}
-            aria-label="Next round"
-            className="hidden shrink-0 items-center justify-center rounded-md border border-court-200 bg-white p-1 text-court-700 transition hover:bg-court-100 disabled:opacity-30 sm:flex"
-          >
-            <ChevronRight size={16} />
-          </button>
+        {/* Round selector — a segmented control. The track makes it read as one
+            switchable control; tap a segment to jump the board to that round. */}
+        <div className="mt-2 grid grid-cols-7 gap-1 rounded-lg bg-court-100 p-1">
+          {sortedRounds.map((round) => {
+            const isActive = round.roundNumber === focusedRoundNumber;
+            return (
+              <button
+                key={round.id}
+                type="button"
+                onClick={() => focusRound(round.roundNumber)}
+                aria-pressed={isActive}
+                className={cn(
+                  "min-w-0 rounded-md py-1.5 text-xs font-black transition",
+                  isActive
+                    ? "bg-[#1a4d3a] text-white shadow-sm"
+                    : "text-court-800 hover:bg-white/70"
+                )}
+                aria-label={`Jump to ${round.roundName}`}
+              >
+                {getRoundLabel(round.roundNumber)}
+              </button>
+            );
+          })}
         </div>
       </div>
       <div
         ref={scrollRef}
-        className="bracket-scroll"
+        className="bracket-scroll cursor-grab active:cursor-grabbing"
         onScroll={handleScroll}
+        onPointerDown={onBoardPointerDown}
+        onPointerMove={onBoardPointerMove}
+        onPointerUp={onBoardPointerUp}
+        onPointerLeave={onBoardPointerUp}
+        onClickCapture={onBoardClickCapture}
       >
         {renderBoard()}
       </div>
