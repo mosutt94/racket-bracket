@@ -990,20 +990,54 @@ export async function recordManualMatchUpdate(input: {
 }) {
   const supabase = getClient();
   const status = input.status ?? (input.winnerPlayerId ? "completed" : "scheduled");
+  const now = new Date().toISOString();
+
+  // Resolve which draw slot the winning player occupies so we can set
+  // winner_draw_slot_id and advance the player exactly like the ESPN sync does.
+  const { data: existing, error: existingError } = await supabase
+    .from("matches")
+    .select("player1_id, player2_id, player1_draw_slot_id, player2_draw_slot_id")
+    .eq("id", input.matchId)
+    .single();
+  throwIfError(existingError);
+  if (!existing) throw new Error("Match not found.");
+
+  let winnerDrawSlotId: string | null = null;
+  if (input.winnerPlayerId) {
+    if (existing.player1_id === input.winnerPlayerId) winnerDrawSlotId = existing.player1_draw_slot_id;
+    else if (existing.player2_id === input.winnerPlayerId) winnerDrawSlotId = existing.player2_draw_slot_id;
+  }
 
   const { data: match, error } = await supabase
     .from("matches")
     .update({
       winner_player_id: input.winnerPlayerId ?? null,
+      winner_draw_slot_id: winnerDrawSlotId,
       score_summary: input.scoreSummary ?? null,
       status,
-      updated_at: new Date().toISOString()
+      updated_at: now
     })
     .eq("id", input.matchId)
     .select("*")
     .single();
 
   throwIfError(error);
+
+  // Propagate the result to the next round so a commissioner override behaves
+  // like a sync: setting a winner advances them; clearing it retracts the slot.
+  if (match.next_match_id && match.next_match_slot) {
+    const nextPlayerColumn = match.next_match_slot === "player1" ? "player1_id" : "player2_id";
+    const nextDrawSlotColumn = match.next_match_slot === "player1" ? "player1_draw_slot_id" : "player2_draw_slot_id";
+    const { error: advanceError } = await supabase
+      .from("matches")
+      .update({
+        [nextPlayerColumn]: input.winnerPlayerId ?? null,
+        [nextDrawSlotColumn]: winnerDrawSlotId,
+        updated_at: now
+      })
+      .eq("id", match.next_match_id);
+    throwIfError(advanceError);
+  }
 
   const { error: overrideError } = await supabase.from("manual_overrides").insert({
     tournament_instance_id: input.tournamentInstanceId,

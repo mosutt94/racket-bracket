@@ -15,6 +15,7 @@ export default function MatchManagementPage({ params }: { params: { poolId: stri
   const [roundFilter, setRoundFilter] = useState(1);
   const [drafts, setDrafts] = useState<Drafts>({});
   const [busyMatchId, setBusyMatchId] = useState<string | null>(null);
+  const [matchMessage, setMatchMessage] = useState<{ id: string; ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     loadAppState().then(setState);
@@ -62,55 +63,96 @@ export default function MatchManagementPage({ params }: { params: { poolId: stri
     const draft = drafts[match.id];
     if (!draft) return;
     setBusyMatchId(match.id);
-    await fetch("/api/admin/matches", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        matchId: match.id,
-        playerSlot: slot,
-        name: slot === "player1" ? draft.player1Name : draft.player2Name,
-        country: slot === "player1" ? draft.player1Country : draft.player2Country,
-        tournamentId: activeTournament.id,
-        tournamentInstanceId: activeTournament.tournamentInstanceId,
-        createdByUserId: getCurrentUserForState(state!).id
-      })
-    });
-    await reloadState();
-    setBusyMatchId(null);
+    setMatchMessage(null);
+    try {
+      const response = await fetch("/api/admin/matches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          matchId: match.id,
+          playerSlot: slot,
+          name: slot === "player1" ? draft.player1Name : draft.player2Name,
+          country: slot === "player1" ? draft.player1Country : draft.player2Country,
+          tournamentId: activeTournament.id,
+          tournamentInstanceId: activeTournament.tournamentInstanceId,
+          createdByUserId: getCurrentUserForState(state!).id
+        })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not save player.");
+      await reloadState();
+      setMatchMessage({ id: match.id, ok: true, text: "Player saved — this match is now a commissioner override." });
+    } catch (error) {
+      setMatchMessage({ id: match.id, ok: false, text: error instanceof Error ? error.message : "Could not save player." });
+    } finally {
+      setBusyMatchId(null);
+    }
   }
 
   async function setWinner(match: Match, winner: Player | null) {
     const draft = drafts[match.id];
     setBusyMatchId(match.id);
-    await fetch("/api/admin/matches", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        matchId: match.id,
-        winnerPlayerId: winner?.id ?? null,
-        scoreSummary: draft?.scoreSummary ?? "",
-        tournamentId: activeTournament.id,
-        tournamentInstanceId: activeTournament.tournamentInstanceId,
-        createdByUserId: getCurrentUserForState(state!).id
-      })
-    });
-    await reloadState();
-    setBusyMatchId(null);
+    setMatchMessage(null);
+    try {
+      const response = await fetch("/api/admin/matches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          matchId: match.id,
+          winnerPlayerId: winner?.id ?? null,
+          scoreSummary: draft?.scoreSummary ?? "",
+          tournamentId: activeTournament.id,
+          tournamentInstanceId: activeTournament.tournamentInstanceId,
+          createdByUserId: getCurrentUserForState(state!).id
+        })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not set winner.");
+      await reloadState();
+      setMatchMessage({ id: match.id, ok: true, text: "Winner set — this match is now a commissioner override." });
+    } catch (error) {
+      setMatchMessage({ id: match.id, ok: false, text: error instanceof Error ? error.message : "Could not set winner." });
+    } finally {
+      setBusyMatchId(null);
+    }
   }
 
-  async function clearOverrides(match: Match) {
+  // Drop the commissioner override AND immediately pull the live result back in,
+  // so handing a match back to ESPN takes effect right away (no separate Sync).
+  async function revertToFeed(match: Match) {
     setBusyMatchId(match.id);
-    await fetch("/api/admin/matches", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        matchId: match.id,
-        tournamentId: activeTournament.id,
-        clearOverrides: true
-      })
-    });
-    await reloadState();
-    setBusyMatchId(null);
+    setMatchMessage(null);
+    try {
+      const clearResponse = await fetch("/api/admin/matches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId: match.id, tournamentId: activeTournament.id, clearOverrides: true })
+      });
+      const clearResult = await clearResponse.json();
+      if (!clearResponse.ok || !clearResult.ok) throw new Error(clearResult.error ?? "Could not revert this match.");
+
+      const syncResponse = await fetch("/api/admin/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tournamentId: activeTournament.id,
+          tournamentInstanceId: activeTournament.tournamentInstanceId,
+          syncType: "match_updates"
+        })
+      });
+      const syncResult = await syncResponse.json();
+      await reloadState();
+      if (!syncResponse.ok || !syncResult.ok) {
+        setMatchMessage({ id: match.id, ok: false, text: "Reverted, but the ESPN sync failed — run Sync from the admin page." });
+        return;
+      }
+      setMatchMessage({ id: match.id, ok: true, text: "Reverted to ESPN and refreshed from the live feed." });
+    } catch (error) {
+      await reloadState();
+      setMatchMessage({ id: match.id, ok: false, text: error instanceof Error ? error.message : "Could not revert this match." });
+    } finally {
+      setBusyMatchId(null);
+    }
   }
 
   function setDraft(matchId: string, key: keyof Drafts[string], value: string) {
@@ -131,7 +173,11 @@ export default function MatchManagementPage({ params }: { params: { poolId: stri
           <div>
             <p className="text-sm font-bold uppercase tracking-wide text-court-700">Commissioner bracket editor</p>
             <h1 className="text-3xl font-black text-ink">{activeTournament.name}</h1>
-            <p className="mt-1 text-sm text-slate-600">Edit player slots or winners directly. Changes are locked so provider sync will not overwrite them.</p>
+            <p className="mt-1 text-sm text-slate-600">
+              Every match is controlled by the ESPN feed by default. Editing a player or winner turns it into a
+              commissioner override and the feed stops touching it. Made a mistake? Use <strong>Revert to ESPN</strong> to
+              drop the override and pull the live result back in.
+            </p>
           </div>
           <label className="text-sm font-bold text-slate-700">
             Round
@@ -155,6 +201,7 @@ export default function MatchManagementPage({ params }: { params: { poolId: stri
               const player2 = match.player2Id ? playerById.get(match.player2Id) ?? null : null;
               const draft = drafts[match.id];
               const overrideCount = state.manualOverrides.filter((override) => override.matchId === match.id && override.locked).length;
+              const isOverridden = overrideCount > 0;
 
               return (
                 <article key={match.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -163,7 +210,11 @@ export default function MatchManagementPage({ params }: { params: { poolId: stri
                       <h3 className="font-black text-ink">Match {match.matchNumber}</h3>
                       <p className="text-xs font-semibold uppercase text-slate-500">{match.status}</p>
                     </div>
-                    {overrideCount > 0 ? <span className="rounded-full bg-court-100 px-2 py-1 text-xs font-black text-court-900">Override locked</span> : null}
+                    {isOverridden ? (
+                      <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-black text-amber-800">Commissioner override</span>
+                    ) : (
+                      <span className="rounded-full bg-court-100 px-2 py-1 text-xs font-black text-court-900">ESPN feed</span>
+                    )}
                   </div>
 
                   <div className="mt-4 space-y-3">
@@ -203,17 +254,23 @@ export default function MatchManagementPage({ params }: { params: { poolId: stri
                     />
                   </label>
 
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button onClick={() => setWinner(match, null)} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700">
-                      <RotateCcw size={15} /> Clear winner
-                    </button>
-                    <button
-                      onClick={() => clearOverrides(match)}
-                      disabled={busyMatchId === match.id || overrideCount === 0}
-                      className="inline-flex items-center gap-2 rounded-lg border border-court-200 bg-white px-3 py-2 text-sm font-bold text-court-800 disabled:border-slate-200 disabled:text-slate-400"
-                    >
-                      Let feed control this match
-                    </button>
+                  <div className="mt-4">
+                    {isOverridden ? (
+                      <button
+                        onClick={() => revertToFeed(match)}
+                        disabled={busyMatchId === match.id}
+                        className="inline-flex items-center gap-2 rounded-lg border border-court-200 bg-white px-3 py-2 text-sm font-bold text-court-800 disabled:opacity-50"
+                      >
+                        <RotateCcw size={15} /> {busyMatchId === match.id ? "Reverting…" : "Revert to ESPN"}
+                      </button>
+                    ) : (
+                      <p className="text-xs font-semibold text-slate-500">ESPN controls this match. Editing a player or winner above will override it.</p>
+                    )}
+                    {matchMessage?.id === match.id ? (
+                      <p className={matchMessage.ok ? "mt-2 text-xs font-bold text-court-700" : "mt-2 text-xs font-bold text-clay-700"}>
+                        {matchMessage.text}
+                      </p>
+                    ) : null}
                   </div>
                 </article>
               );
