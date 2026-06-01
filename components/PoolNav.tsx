@@ -29,9 +29,10 @@ export function PoolNav({
     window.location.href = "/";
   }
 
-  // Admin is commissioner-only; scoring config now lives inside the Admin page.
+  // "← Brackets" returns to the cross-bracket overview (/dashboard). Admin is
+  // commissioner-only; scoring config now lives inside the Admin page.
   const links: Array<[string, string]> = [
-    ["Home", `/pools/${poolId}`],
+    ["← Brackets", "/dashboard"],
     ["Tournament", `/pools/${poolId}/bracket`],
     ["My Bracket", `/pools/${poolId}/my-bracket`],
     ["Leaderboard", `/pools/${poolId}/leaderboard`],

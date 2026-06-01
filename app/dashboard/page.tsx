@@ -46,7 +46,7 @@ export default function DashboardPage() {
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <p className="text-sm font-bold uppercase tracking-wide text-court-700">Commissioner</p>
+            <p className="text-sm font-bold uppercase tracking-wide text-court-700">Racket Bracket</p>
             <h1 className="text-2xl font-black text-ink sm:text-3xl">Your brackets</h1>
             <p className="mt-1 text-sm font-semibold text-slate-600">Signed in as {user.displayName} · {user.email}</p>
           </div>

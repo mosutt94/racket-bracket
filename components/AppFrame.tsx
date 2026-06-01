@@ -29,7 +29,7 @@ export function AppFrame({ children, compact = false }: { children: React.ReactN
             "max-w-7xl py-3"
           )}
         >
-          <Link href="/" className="flex items-center gap-2 text-lg font-black text-white">
+          <Link href={user ? "/dashboard" : "/"} className="flex items-center gap-2 text-lg font-black text-white">
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ball text-court-900">
               <Trophy size={18} />
             </span>
