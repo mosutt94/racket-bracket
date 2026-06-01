@@ -177,6 +177,12 @@ export function BracketBoard({
     focusSyncTimer.current = window.setTimeout(() => {
       const el = scrollRef.current;
       if (!el) return;
+      // Scroll only drives the focused round on mobile, where a swipe snaps one
+      // round at a time. On desktop, free horizontal scrolling just pans the
+      // board — letting it change focus mid-scroll reflows the columns and
+      // yanks the view vertically, which feels erratic on a trackpad. There the
+      // focused round changes only via the round selector.
+      if (!window.matchMedia("(max-width: 1023px)").matches) return;
       const span = cardWidth + columnGap;
       const index = Math.round((el.scrollLeft + 12) / span);
       const target = sortedRounds[Math.min(Math.max(index, 0), sortedRounds.length - 1)];
