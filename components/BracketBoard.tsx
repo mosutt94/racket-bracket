@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, CircleDot, Trophy, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, CircleDot, Trophy, X } from "lucide-react";
 import { getProjectedMatchPlayers } from "@/lib/services/bracket-service";
 import { countryCodeToFlagEmoji } from "@/lib/country-flags";
 import type { BracketLiveScore, BracketPick, Match, Player, ProviderMatchStatus, TournamentRound } from "@/lib/types";
@@ -139,6 +139,8 @@ export function BracketBoard({
   }
   const showScore = mode !== "real" && hasResults;
   const sortedRounds = [...rounds].sort((a, b) => a.roundNumber - b.roundNumber);
+  const firstRoundNumber = sortedRounds[0]?.roundNumber ?? 1;
+  const lastRoundNumber = sortedRounds[sortedRounds.length - 1]?.roundNumber ?? 1;
   const finalRound = sortedRounds[sortedRounds.length - 1];
   const contentWidth = sortedRounds.length * cardWidth + Math.max(0, sortedRounds.length - 1) * columnGap + 32;
   const progressPercent = totalPicks ? Math.min(100, Math.round(((pickedCount ?? 0) / totalPicks) * 100)) : 0;
@@ -519,27 +521,48 @@ export function BracketBoard({
         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-court-50">
           <div className="h-full rounded-full bg-court-700" style={{ width: `${progressPercent}%` }} />
         </div>
-        {/* Compact round selector — tap to jump/focus a round. */}
-        <div className="mt-2 grid grid-cols-7 gap-1">
-          {sortedRounds.map((round) => {
-            const isActive = round.roundNumber === focusedRoundNumber;
-            return (
-              <button
-                key={round.id}
-                type="button"
-                onClick={() => focusRound(round.roundNumber)}
-                className={cn(
-                  "min-w-0 rounded-md py-1.5 text-xs font-black transition",
-                  isActive
-                    ? "bg-[#1a4d3a] text-white shadow-sm"
-                    : "bg-court-50 text-slate-500 hover:bg-court-100 hover:text-ink"
-                )}
-                aria-label={`Focus ${round.roundName}`}
-              >
-                {getRoundLabel(round.roundNumber)}
-              </button>
-            );
-          })}
+        {/* Round selector — tap a round to jump, or use the arrows to step across. */}
+        <div className="mt-2 flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => focusRound(focusedRoundNumber - 1)}
+            disabled={focusedRoundNumber <= firstRoundNumber}
+            aria-label="Previous round"
+            className="hidden shrink-0 items-center justify-center rounded-md border border-court-200 bg-white p-1 text-court-700 transition hover:bg-court-100 disabled:opacity-30 sm:flex"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <div className="grid flex-1 grid-cols-7 gap-1">
+            {sortedRounds.map((round) => {
+              const isActive = round.roundNumber === focusedRoundNumber;
+              return (
+                <button
+                  key={round.id}
+                  type="button"
+                  onClick={() => focusRound(round.roundNumber)}
+                  aria-pressed={isActive}
+                  className={cn(
+                    "min-w-0 rounded-md border py-1.5 text-xs font-black transition",
+                    isActive
+                      ? "border-[#1a4d3a] bg-[#1a4d3a] text-white shadow-sm"
+                      : "border-court-200 bg-court-50 text-court-800 hover:border-court-300 hover:bg-court-100"
+                  )}
+                  aria-label={`Focus ${round.roundName}`}
+                >
+                  {getRoundLabel(round.roundNumber)}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => focusRound(focusedRoundNumber + 1)}
+            disabled={focusedRoundNumber >= lastRoundNumber}
+            aria-label="Next round"
+            className="hidden shrink-0 items-center justify-center rounded-md border border-court-200 bg-white p-1 text-court-700 transition hover:bg-court-100 disabled:opacity-30 sm:flex"
+          >
+            <ChevronRight size={16} />
+          </button>
         </div>
       </div>
       <div
