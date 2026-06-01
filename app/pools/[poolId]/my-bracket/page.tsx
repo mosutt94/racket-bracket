@@ -111,13 +111,6 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
   const pickedCount = matches.filter((match) => state.bracketPicks.some((pick) => pick.bracketId === activeBracket.id && pick.matchId === match.id)).length;
   const sortedMatches = [...matches].sort((a, b) => a.roundNumber - b.roundNumber || a.matchNumber - b.matchNumber);
   const nextMissingMatch = sortedMatches.find((match) => !state.bracketPicks.some((pick) => pick.bracketId === activeBracket.id && pick.matchId === match.id));
-  const roundProgress = [...rounds]
-    .sort((a, b) => a.roundNumber - b.roundNumber)
-    .map((round) => {
-      const roundMatches = matches.filter((match) => match.roundNumber === round.roundNumber);
-      const roundPicked = roundMatches.filter((match) => state.bracketPicks.some((pick) => pick.bracketId === activeBracket.id && pick.matchId === match.id)).length;
-      return { round, picked: roundPicked, total: roundMatches.length };
-    });
 
   function choose(matchId: string, playerId: string) {
     if (!state || !activeBracket) return;
@@ -211,22 +204,6 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
           <PoolNav poolId={params.poolId} compact showAccount isCommissioner={isPoolCommissioner(state, params.poolId)} />
         </div>
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain">
-          <div className="mb-2 hidden rounded-lg border border-court-200 bg-white p-2 shadow-sm lg:block">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-              {roundProgress.map(({ round, picked, total }) => (
-                <div
-                  key={round.id}
-                  className="rounded-lg bg-court-50 px-2.5 py-2"
-                >
-                  <p className="truncate text-[11px] font-black text-ink">{round.roundName}</p>
-                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white">
-                    <div className="h-full rounded-full bg-court-700" style={{ width: `${total ? (picked / total) * 100 : 0}%` }} />
-                  </div>
-                  <p className="mt-1 text-[11px] font-bold text-slate-600">{picked}/{total}</p>
-                </div>
-              ))}
-            </div>
-          </div>
           <BracketBoard
             bracketId={activeBracket.id}
             mode={locked ? "review" : "picking"}
