@@ -5,6 +5,7 @@ import { CalendarClock, Lock, Settings, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { PoolNav } from "@/components/PoolNav";
+import { StatusBadge } from "@/components/StatusBadge";
 import { getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
 import { getLeaderboard } from "@/lib/services/scoring-service";
 import { findTournamentForPool } from "@/lib/state-helpers";
@@ -31,6 +32,8 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   const [state, setState] = useState<AppState | null>(null);
   const [busy, setBusy] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [statusBusy, setStatusBusy] = useState<TournamentStatus | null>(null);
+  const [statusMessage, setStatusMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [scoringRounds, setScoringRounds] = useState<TournamentRound[]>([]);
   const [scoringSave, setScoringSave] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [scoringError, setScoringError] = useState<string | null>(null);
@@ -57,6 +60,8 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   const activePool = pool;
   const activeTournament = tournament;
   const isCommissioner = activePool.commissionerUserId === getCurrentUserForState(state).id;
+  const isPickingOpen = activeTournament.status === "picking_open";
+  const isLocked = activeTournament.status === "locked";
   const members = state.poolMembers.filter((member) => member.poolId === activePool.id);
   const leaderboard = getLeaderboard(state, activePool.id, activeTournament.id);
   const submitted = state.brackets.filter((bracket) => bracket.poolId === activePool.id && bracket.tournamentId === activeTournament.id && bracket.status !== "draft");
@@ -67,6 +72,8 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   const lastSync = syncRuns[0];
 
   async function setTournamentStatus(status: TournamentStatus) {
+    setStatusBusy(status);
+    setStatusMessage(null);
     try {
       const response = await fetch("/api/admin/tournament-status", {
         method: "POST",
@@ -76,8 +83,11 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not update status.");
       setState(await loadAppState());
+      setStatusMessage({ ok: true, text: status === "picking_open" ? "Picking is now open." : "Picking is now locked." });
     } catch (error) {
-      setSyncStatus({ ok: false, error: error instanceof Error ? error.message : "Could not update status." });
+      setStatusMessage({ ok: false, text: error instanceof Error ? error.message : "Could not update status." });
+    } finally {
+      setStatusBusy(null);
     }
   }
 
@@ -170,10 +180,37 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
           </section>
           <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-black">Bracket tools</h2>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <button onClick={() => setTournamentStatus("locked")} className="rounded-lg bg-ink px-4 py-3 font-bold text-white">Lock picking</button>
-              <button onClick={() => setTournamentStatus("picking_open")} className="rounded-lg border border-court-200 px-4 py-3 font-bold text-court-800">Unlock picking</button>
+            <div className="mt-3 flex items-center gap-2 text-sm font-semibold text-slate-600">
+              <span>Picking status:</span>
+              <StatusBadge status={activeTournament.status} />
             </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <button
+                onClick={() => setTournamentStatus("locked")}
+                disabled={statusBusy !== null || isLocked}
+                className="rounded-lg bg-ink px-4 py-3 font-bold text-white transition hover:bg-court-900 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {statusBusy === "locked" ? "Locking…" : isLocked ? "Picking locked" : "Lock picking"}
+              </button>
+              <button
+                onClick={() => setTournamentStatus("picking_open")}
+                disabled={statusBusy !== null || isPickingOpen}
+                className="rounded-lg border border-court-200 px-4 py-3 font-bold text-court-800 transition hover:bg-court-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {statusBusy === "picking_open" ? "Unlocking…" : isPickingOpen ? "Picking open" : "Unlock picking"}
+              </button>
+            </div>
+            {statusMessage ? (
+              <p
+                className={
+                  statusMessage.ok
+                    ? "mt-3 text-sm font-bold text-court-700"
+                    : "mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-clay-700"
+                }
+              >
+                {statusMessage.text}
+              </p>
+            ) : null}
           </section>
           <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-black">Bracket corrections</h2>
