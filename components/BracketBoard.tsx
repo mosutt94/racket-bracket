@@ -192,50 +192,6 @@ export function BracketBoard({
     }, 90);
   };
 
-  // Drag-to-pan: let mouse users grab the bracket and scroll it horizontally,
-  // like dragging a map. Touch keeps native scroll/snap (we only act on mouse).
-  // A small movement threshold separates a pan from a pick click, and we swallow
-  // the click that ends a real drag so picking still works on My Bracket.
-  const dragRef = useRef<{ startX: number; startScroll: number; moved: boolean } | null>(null);
-  const suppressClickRef = useRef(false);
-
-  const onBoardPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.pointerType !== "mouse" || event.button !== 0) return;
-    const el = scrollRef.current;
-    if (!el) return;
-    suppressClickRef.current = false;
-    dragRef.current = { startX: event.clientX, startScroll: el.scrollLeft, moved: false };
-  };
-
-  const onBoardPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current;
-    const el = scrollRef.current;
-    if (!drag || !el) return;
-    const dx = event.clientX - drag.startX;
-    if (!drag.moved && Math.abs(dx) < 5) return;
-    if (!drag.moved) {
-      drag.moved = true;
-      el.setPointerCapture?.(event.pointerId);
-    }
-    suppressClickRef.current = true;
-    el.scrollLeft = drag.startScroll - dx;
-  };
-
-  const onBoardPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-    const el = scrollRef.current;
-    if (el?.hasPointerCapture?.(event.pointerId)) el.releasePointerCapture(event.pointerId);
-    dragRef.current = null;
-  };
-
-  // A drag ends with a click event; swallow it (capture phase) so a pan doesn't
-  // register as a pick. Reset the flag either way.
-  const onBoardClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!suppressClickRef.current) return;
-    suppressClickRef.current = false;
-    event.preventDefault();
-    event.stopPropagation();
-  };
-
   const getRoundMatches = (roundNumber: number) =>
     matches
       .filter((match) => match.roundNumber === roundNumber)
@@ -597,13 +553,8 @@ export function BracketBoard({
       </div>
       <div
         ref={scrollRef}
-        className="bracket-scroll cursor-grab active:cursor-grabbing"
+        className="bracket-scroll"
         onScroll={handleScroll}
-        onPointerDown={onBoardPointerDown}
-        onPointerMove={onBoardPointerMove}
-        onPointerUp={onBoardPointerUp}
-        onPointerLeave={onBoardPointerUp}
-        onClickCapture={onBoardClickCapture}
       >
         {renderBoard()}
       </div>
