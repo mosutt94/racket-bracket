@@ -526,9 +526,8 @@ export function BracketBoard({
         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-court-50">
           <div className="h-full rounded-full bg-court-700" style={{ width: `${progressPercent}%` }} />
         </div>
-        {/* Round selector — a segmented control. The track makes it read as one
-            switchable control; tap a segment to jump the board to that round. */}
-        <div className="mt-2 grid grid-cols-7 gap-1 rounded-lg bg-court-100 p-1">
+        {/* Round selector — each round is its own button; tap to jump the board. */}
+        <div className="mt-2 grid grid-cols-7 gap-1.5">
           {sortedRounds.map((round) => {
             const isActive = round.roundNumber === focusedRoundNumber;
             return (
@@ -538,10 +537,10 @@ export function BracketBoard({
                 onClick={() => focusRound(round.roundNumber)}
                 aria-pressed={isActive}
                 className={cn(
-                  "min-w-0 rounded-md py-1.5 text-xs font-black transition",
+                  "min-w-0 rounded-md border py-1.5 text-xs font-black shadow-sm transition",
                   isActive
-                    ? "bg-[#1a4d3a] text-white shadow-sm"
-                    : "text-court-800 hover:bg-white/70"
+                    ? "border-[#1a4d3a] bg-[#1a4d3a] text-white"
+                    : "border-court-300 bg-court-100 text-court-900 hover:border-court-400 hover:bg-court-200"
                 )}
                 aria-label={`Jump to ${round.roundName}`}
               >
