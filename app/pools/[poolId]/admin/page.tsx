@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, Lock, Settings, Users } from "lucide-react";
+import { CalendarClock, Lock, Settings, Trash2, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { PoolNav } from "@/components/PoolNav";
@@ -37,6 +37,8 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   const [scoringRounds, setScoringRounds] = useState<TournamentRound[]>([]);
   const [scoringSave, setScoringSave] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [scoringError, setScoringError] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [deleteMessage, setDeleteMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     loadAppState().then(setState);
@@ -128,6 +130,30 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
     } catch (error) {
       setScoringSave("error");
       setScoringError(error instanceof Error ? error.message : "Could not save scoring.");
+    }
+  }
+
+  async function deleteSubmission(userId: string, displayName: string) {
+    if (!window.confirm(`Delete ${displayName}'s bracket? Their picks are permanently removed and they'll need to re-enter.`)) return;
+    setDeletingUserId(userId);
+    setDeleteMessage(null);
+    try {
+      const response = await fetch("/api/admin/delete-bracket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ poolId: activePool.id, tournamentId: activeTournament.id, userId })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not delete submission.");
+      setState(await loadAppState());
+      setDeleteMessage({
+        ok: true,
+        text: result.deleted ? `Deleted ${displayName}'s bracket.` : `${displayName} had no bracket to delete.`
+      });
+    } catch (error) {
+      setDeleteMessage({ ok: false, text: error instanceof Error ? error.message : "Could not delete submission." });
+    } finally {
+      setDeletingUserId(null);
     }
   }
 
@@ -223,14 +249,44 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
           </section>
           <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-black">Submission tracker</h2>
+            <p className="mt-1 text-sm text-slate-600">Delete a member&apos;s bracket to clear their picks so they can re-enter.</p>
             <div className="mt-4 space-y-2">
-              {leaderboard.map((row) => (
-                <div key={row.userId} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                  <span className="font-semibold">{row.displayName}</span>
-                  <span className="text-sm font-bold text-slate-600">{row.bracketStatus}</span>
-                </div>
-              ))}
+              {leaderboard.map((row) => {
+                const userBracket = state.brackets.find(
+                  (item) => item.poolId === activePool.id && item.tournamentId === activeTournament.id && item.userId === row.userId
+                );
+                return (
+                  <div key={row.userId} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">
+                    <span className="min-w-0 truncate font-semibold">{row.displayName}</span>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span className="text-sm font-bold capitalize text-slate-600">{row.bracketStatus}</span>
+                      {userBracket ? (
+                        <button
+                          type="button"
+                          onClick={() => deleteSubmission(row.userId, row.displayName)}
+                          disabled={deletingUserId === row.userId}
+                          aria-label={`Delete ${row.displayName}'s bracket`}
+                          className="inline-flex items-center gap-1 rounded-lg border border-clay-300 bg-white px-2.5 py-1.5 text-xs font-bold text-clay-700 transition hover:bg-clay-100 disabled:opacity-50"
+                        >
+                          <Trash2 size={14} /> {deletingUserId === row.userId ? "Deleting…" : "Delete"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+            {deleteMessage ? (
+              <p
+                className={
+                  deleteMessage.ok
+                    ? "mt-3 text-sm font-bold text-court-700"
+                    : "mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-clay-700"
+                }
+              >
+                {deleteMessage.text}
+              </p>
+            ) : null}
           </section>
           <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm lg:col-span-2">
             <h2 className="text-lg font-black">Scoring</h2>

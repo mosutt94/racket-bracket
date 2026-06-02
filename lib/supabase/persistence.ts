@@ -1161,6 +1161,33 @@ export async function recalculateTournamentScoresInSupabase(tournamentId: string
   return { bracketsScored: brackets.length, picksScored: picks.length };
 }
 
+/**
+ * Commissioner tool: delete a single user's submission (their bracket, all its
+ * picks, and any score events) for a pool's tournament. The user keeps their
+ * membership and can re-enter a fresh bracket. FK cascades would cover the
+ * children, but we delete explicitly (mirroring the reset path) to be safe.
+ */
+export async function deleteUserBracketInSupabase(input: { poolId: string; tournamentId: string; userId: string }) {
+  const supabase = getClient();
+  const { data: bracket, error: lookupError } = await supabase
+    .from("brackets")
+    .select("id")
+    .eq("pool_id", input.poolId)
+    .eq("tournament_id", input.tournamentId)
+    .eq("user_id", input.userId)
+    .maybeSingle();
+  throwIfError(lookupError);
+  if (!bracket) return { deleted: false as const };
+
+  throwIfError(
+    (await supabase.from("score_events").delete().eq("tournament_id", input.tournamentId).eq("user_id", input.userId)).error
+  );
+  throwIfError((await supabase.from("bracket_picks").delete().eq("bracket_id", bracket.id)).error);
+  throwIfError((await supabase.from("brackets").delete().eq("id", bracket.id)).error);
+
+  return { deleted: true as const, bracketId: bracket.id };
+}
+
 export async function syncEspnLiveUpdatesInSupabase(input: {
   tournamentId: string;
   tournamentInstanceId: string;
