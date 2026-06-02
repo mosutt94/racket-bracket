@@ -1193,6 +1193,43 @@ export async function deleteUserBracketInSupabase(input: { poolId: string; tourn
   return { deleted: true as const, bracketId: bracket.id };
 }
 
+/**
+ * Commissioner tool: remove a member from a pool entirely. Cleans up any bracket
+ * they have in the pool first, then the membership. The commissioner can't be
+ * removed. Use this to clear "not started" members (including orphaned duplicate
+ * profiles) from the roster.
+ */
+export async function removePoolMemberInSupabase(input: { poolId: string; userId: string }) {
+  const supabase = getClient();
+
+  const { data: pool, error: poolError } = await supabase
+    .from("pools")
+    .select("commissioner_user_id")
+    .eq("id", input.poolId)
+    .maybeSingle();
+  throwIfError(poolError);
+  if (!pool) throw new Error("Pool not found.");
+  if (pool.commissioner_user_id === input.userId) throw new Error("The commissioner can't be removed from the bracket.");
+
+  const { data: brackets, error: bracketsError } = await supabase
+    .from("brackets")
+    .select("id, tournament_id")
+    .eq("pool_id", input.poolId)
+    .eq("user_id", input.userId);
+  throwIfError(bracketsError);
+
+  for (const bracket of brackets ?? []) {
+    throwIfError(
+      (await supabase.from("score_events").delete().eq("tournament_id", bracket.tournament_id).eq("user_id", input.userId)).error
+    );
+    throwIfError((await supabase.from("bracket_picks").delete().eq("bracket_id", bracket.id)).error);
+    throwIfError((await supabase.from("brackets").delete().eq("id", bracket.id)).error);
+  }
+
+  throwIfError((await supabase.from("pool_members").delete().eq("pool_id", input.poolId).eq("user_id", input.userId)).error);
+  return { removed: true as const };
+}
+
 export async function syncEspnLiveUpdatesInSupabase(input: {
   tournamentId: string;
   tournamentInstanceId: string;

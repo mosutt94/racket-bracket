@@ -163,6 +163,27 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
     }
   }
 
+  async function removeMember(userId: string, displayName: string) {
+    if (!window.confirm(`Remove ${displayName} from this bracket? They'll need a new invite to rejoin.`)) return;
+    setDeletingUserId(userId);
+    setDeleteMessage(null);
+    try {
+      const response = await fetch("/api/admin/remove-member", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ poolId: activePool.id, userId })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not remove member.");
+      setState(await loadAppState());
+      setDeleteMessage({ ok: true, text: `Removed ${displayName}.` });
+    } catch (error) {
+      setDeleteMessage({ ok: false, text: error instanceof Error ? error.message : "Could not remove member." });
+    } finally {
+      setDeletingUserId(null);
+    }
+  }
+
   return (
     <AppFrame compact>
       <main className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
@@ -280,7 +301,20 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
               {membersWithoutBracket.map((member) => (
                 <div key={member.userId} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">
                   <span className="min-w-0 truncate font-semibold">{profileName(member.userId)}</span>
-                  <span className="shrink-0 text-sm font-bold text-slate-400">not started</span>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <span className="text-sm font-bold text-slate-400">not started</span>
+                    {member.userId === activePool.commissionerUserId ? null : (
+                      <button
+                        type="button"
+                        onClick={() => removeMember(member.userId, profileName(member.userId))}
+                        disabled={deletingUserId === member.userId}
+                        aria-label={`Remove ${profileName(member.userId)} from the bracket`}
+                        className="inline-flex items-center gap-1 rounded-lg border border-clay-300 bg-white px-2.5 py-1.5 text-xs font-bold text-clay-700 transition hover:bg-clay-100 disabled:opacity-50"
+                      >
+                        <Trash2 size={14} /> {deletingUserId === member.userId ? "Removing…" : "Remove"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
