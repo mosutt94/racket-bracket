@@ -493,12 +493,16 @@ export async function updateTournamentScoringInSupabase(input: {
 }
 
 async function getOrCreateProfileByEmail(supabase: SupabaseClient, input: { email: string; displayName: string }) {
-  const { data: existingProfile, error: profileLookupError } = await supabase.from("profiles").select("*").eq("email", input.email).maybeSingle();
+  // Normalize here so every caller (sign-in, join, create) resolves to the same
+  // profile. Looking up a raw, differently-cased email used to miss the existing
+  // row and create a duplicate profile, splitting a person across two ids.
+  const email = input.email.trim().toLowerCase();
+  const { data: existingProfile, error: profileLookupError } = await supabase.from("profiles").select("*").eq("email", email).maybeSingle();
   throwIfError(profileLookupError);
 
   if (!existingProfile) {
     const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
-      email: input.email,
+      email,
       email_confirm: true,
       user_metadata: { display_name: input.displayName }
     });
@@ -509,7 +513,7 @@ async function getOrCreateProfileByEmail(supabase: SupabaseClient, input: { emai
       .from("profiles")
       .insert({
         id: authUser.user.id,
-        email: input.email,
+        email,
         display_name: input.displayName
       })
       .select("*")
@@ -889,16 +893,17 @@ export async function joinPoolByEmail(input: { inviteCode: string; email: string
 
 export async function getBracketBundle(input: { poolId?: string | null; tournamentId?: string | null; userId?: string | null }) {
   const supabase = getClient();
-  let query = supabase.from("brackets").select("*");
+  // Page through brackets (default PostgREST cap is 1000) so a large number of
+  // pools sharing a Slam never silently drops some pools' submissions.
+  const brackets = await fetchAllRows((from, to) => {
+    let query = supabase.from("brackets").select("*");
+    if (input.poolId) query = query.eq("pool_id", input.poolId);
+    if (input.tournamentId) query = query.eq("tournament_id", input.tournamentId);
+    if (input.userId) query = query.eq("user_id", input.userId);
+    return query.order("submitted_at", { ascending: false, nullsFirst: false }).range(from, to);
+  });
 
-  if (input.poolId) query = query.eq("pool_id", input.poolId);
-  if (input.tournamentId) query = query.eq("tournament_id", input.tournamentId);
-  if (input.userId) query = query.eq("user_id", input.userId);
-
-  const { data: brackets, error } = await query.order("submitted_at", { ascending: false, nullsFirst: false });
-  throwIfError(error);
-
-  const bracketIds = (brackets ?? []).map((row: any) => row.id);
+  const bracketIds = brackets.map((row: any) => row.id);
   if (bracketIds.length === 0) return { brackets: [], picks: [] };
 
   // bracket_picks can exceed PostgREST's 1000-row cap (8+ pools × 127 picks), so page.
@@ -907,7 +912,7 @@ export async function getBracketBundle(input: { poolId?: string | null; tourname
   );
 
   return {
-    brackets: (brackets ?? []).map(mapBracket),
+    brackets: brackets.map(mapBracket),
     picks: picks.map(mapBracketPick)
   };
 }
