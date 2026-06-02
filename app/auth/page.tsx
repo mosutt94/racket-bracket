@@ -78,9 +78,9 @@ export default function AuthPage() {
         <div className="w-full rounded-xl border border-court-200 bg-white p-6 shadow-soft">
           {step === "email" ? (
             <>
-              <h1 className="text-2xl font-black text-ink">Commissioner sign in</h1>
+              <h1 className="text-2xl font-black text-ink">Sign in</h1>
               <p className="mt-2 text-sm text-slate-600">
-                Enter your email. New here? We&apos;ll get you set up in one more step.
+                Enter the email you joined with to see your brackets and the leaderboard. New here? We&apos;ll get you set up in one more step.
               </p>
               <div className="mt-6 space-y-4">
                 <label className="block text-sm font-semibold text-slate-700">
