@@ -139,32 +139,8 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
     }
   }
 
-  async function deleteSubmission(userId: string, displayName: string) {
-    if (!window.confirm(`Delete ${displayName}'s bracket? Their picks are permanently removed and they'll need to re-enter.`)) return;
-    setDeletingUserId(userId);
-    setDeleteMessage(null);
-    try {
-      const response = await fetch("/api/admin/delete-bracket", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ poolId: activePool.id, tournamentId: activeTournament.id, userId })
-      });
-      const result = await response.json();
-      if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not delete submission.");
-      setState(await loadAppState());
-      setDeleteMessage({
-        ok: true,
-        text: result.deleted ? `Deleted ${displayName}'s bracket.` : `${displayName} had no bracket to delete.`
-      });
-    } catch (error) {
-      setDeleteMessage({ ok: false, text: error instanceof Error ? error.message : "Could not delete submission." });
-    } finally {
-      setDeletingUserId(null);
-    }
-  }
-
   async function removeMember(userId: string, displayName: string) {
-    if (!window.confirm(`Remove ${displayName} from this bracket? They'll need a new invite to rejoin.`)) return;
+    if (!window.confirm(`Remove ${displayName} from this bracket? This deletes their picks and they'll need a new invite to rejoin.`)) return;
     setDeletingUserId(userId);
     setDeleteMessage(null);
     try {
@@ -276,7 +252,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
           </section>
           <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-black">Submission tracker</h2>
-            <p className="mt-1 text-sm text-slate-600">Delete a member&apos;s bracket to clear their picks so they can re-enter.</p>
+            <p className="mt-1 text-sm text-slate-600">Removing a member deletes their bracket and takes them off the roster.</p>
             <div className="mt-4 space-y-2">
               {poolBrackets.length === 0 && membersWithoutBracket.length === 0 ? (
                 <p className="text-sm text-slate-500">No members yet.</p>
@@ -286,15 +262,17 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
                   <span className="min-w-0 truncate font-semibold">{profileName(bracket.userId)}</span>
                   <div className="flex shrink-0 items-center gap-3">
                     <span className="text-sm font-bold capitalize text-slate-600">{bracket.status}</span>
-                    <button
-                      type="button"
-                      onClick={() => deleteSubmission(bracket.userId, profileName(bracket.userId))}
-                      disabled={deletingUserId === bracket.userId}
-                      aria-label={`Delete ${profileName(bracket.userId)}'s bracket`}
-                      className="inline-flex items-center gap-1 rounded-lg border border-clay-300 bg-white px-2.5 py-1.5 text-xs font-bold text-clay-700 transition hover:bg-clay-100 disabled:opacity-50"
-                    >
-                      <Trash2 size={14} /> {deletingUserId === bracket.userId ? "Deleting…" : "Delete"}
-                    </button>
+                    {bracket.userId === activePool.commissionerUserId ? null : (
+                      <button
+                        type="button"
+                        onClick={() => removeMember(bracket.userId, profileName(bracket.userId))}
+                        disabled={deletingUserId === bracket.userId}
+                        aria-label={`Remove ${profileName(bracket.userId)} from the bracket`}
+                        className="inline-flex items-center gap-1 rounded-lg border border-clay-300 bg-white px-2.5 py-1.5 text-xs font-bold text-clay-700 transition hover:bg-clay-100 disabled:opacity-50"
+                      >
+                        <Trash2 size={14} /> {deletingUserId === bracket.userId ? "Removing…" : "Remove"}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
