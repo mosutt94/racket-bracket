@@ -7,7 +7,6 @@ import { AppFrame } from "@/components/AppFrame";
 import { PoolNav } from "@/components/PoolNav";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
-import { getLeaderboard } from "@/lib/services/scoring-service";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import type { AppState, TournamentRound, TournamentStatus } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
@@ -65,8 +64,15 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   const isPickingOpen = activeTournament.status === "picking_open";
   const isLocked = activeTournament.status === "locked";
   const members = state.poolMembers.filter((member) => member.poolId === activePool.id);
-  const leaderboard = getLeaderboard(state, activePool.id, activeTournament.id);
-  const submitted = state.brackets.filter((bracket) => bracket.poolId === activePool.id && bracket.tournamentId === activeTournament.id && bracket.status !== "draft");
+  // Drive the submission tracker off the brackets that actually exist for this
+  // pool, not the member list. The two can drift apart (email-based identity can
+  // split a person across profile ids), and we must be able to delete every real
+  // bracket regardless of whether it maps cleanly to a member row.
+  const poolBrackets = state.brackets.filter((item) => item.poolId === activePool.id && item.tournamentId === activeTournament.id);
+  const submittedUserIds = new Set(poolBrackets.map((item) => item.userId));
+  const membersWithoutBracket = members.filter((member) => !submittedUserIds.has(member.userId));
+  const profileName = (userId: string) => state.profiles.find((profile) => profile.id === userId)?.displayName ?? "Unknown player";
+  const submitted = poolBrackets.filter((bracket) => bracket.status !== "draft");
   const activeInstance = state.tournamentInstances.find((instance) => instance.id === activeTournament.tournamentInstanceId);
   const syncRuns = state.providerSyncRuns
     .filter((run) => run.tournamentId === activeTournament.id || run.tournamentInstanceId === activeTournament.tournamentInstanceId)
@@ -251,30 +257,32 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
             <h2 className="text-lg font-black">Submission tracker</h2>
             <p className="mt-1 text-sm text-slate-600">Delete a member&apos;s bracket to clear their picks so they can re-enter.</p>
             <div className="mt-4 space-y-2">
-              {leaderboard.map((row) => {
-                const userBracket = state.brackets.find(
-                  (item) => item.poolId === activePool.id && item.tournamentId === activeTournament.id && item.userId === row.userId
-                );
-                return (
-                  <div key={row.userId} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">
-                    <span className="min-w-0 truncate font-semibold">{row.displayName}</span>
-                    <div className="flex shrink-0 items-center gap-3">
-                      <span className="text-sm font-bold capitalize text-slate-600">{row.bracketStatus}</span>
-                      {userBracket ? (
-                        <button
-                          type="button"
-                          onClick={() => deleteSubmission(row.userId, row.displayName)}
-                          disabled={deletingUserId === row.userId}
-                          aria-label={`Delete ${row.displayName}'s bracket`}
-                          className="inline-flex items-center gap-1 rounded-lg border border-clay-300 bg-white px-2.5 py-1.5 text-xs font-bold text-clay-700 transition hover:bg-clay-100 disabled:opacity-50"
-                        >
-                          <Trash2 size={14} /> {deletingUserId === row.userId ? "Deleting…" : "Delete"}
-                        </button>
-                      ) : null}
-                    </div>
+              {poolBrackets.length === 0 && membersWithoutBracket.length === 0 ? (
+                <p className="text-sm text-slate-500">No members yet.</p>
+              ) : null}
+              {poolBrackets.map((bracket) => (
+                <div key={bracket.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">
+                  <span className="min-w-0 truncate font-semibold">{profileName(bracket.userId)}</span>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <span className="text-sm font-bold capitalize text-slate-600">{bracket.status}</span>
+                    <button
+                      type="button"
+                      onClick={() => deleteSubmission(bracket.userId, profileName(bracket.userId))}
+                      disabled={deletingUserId === bracket.userId}
+                      aria-label={`Delete ${profileName(bracket.userId)}'s bracket`}
+                      className="inline-flex items-center gap-1 rounded-lg border border-clay-300 bg-white px-2.5 py-1.5 text-xs font-bold text-clay-700 transition hover:bg-clay-100 disabled:opacity-50"
+                    >
+                      <Trash2 size={14} /> {deletingUserId === bracket.userId ? "Deleting…" : "Delete"}
+                    </button>
                   </div>
-                );
-              })}
+                </div>
+              ))}
+              {membersWithoutBracket.map((member) => (
+                <div key={member.userId} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">
+                  <span className="min-w-0 truncate font-semibold">{profileName(member.userId)}</span>
+                  <span className="shrink-0 text-sm font-bold text-slate-400">not started</span>
+                </div>
+              ))}
             </div>
             {deleteMessage ? (
               <p
