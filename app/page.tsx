@@ -1,4 +1,4 @@
-import { ShieldCheck, Trophy, Users } from "lucide-react";
+import { Activity, Trophy, Users } from "lucide-react";
 import { AppFrame } from "@/components/AppFrame";
 import { HomeHeroActions } from "@/components/HomeHeroActions";
 
@@ -38,8 +38,8 @@ export default function LandingPage() {
         <section className="mx-auto grid max-w-7xl gap-4 px-4 py-10 sm:px-6 md:grid-cols-3 lg:px-8">
           {[
             [Users, "Friend-group first", "Private invite codes, bracket membership, and commissioner controls."],
-            [Trophy, "Tennis bracket flow", "A real Grand Slam singles draw — 128 players, first round through the final, flowing left to right like the actual bracket."],
-            [ShieldCheck, "Built to change", "Scoring, providers, tournaments, and admin tools live in separate modules."]
+            [Trophy, "Tennis bracket flow", "The complete 128-player Grand Slam singles draw, from the opening round through to the final."],
+            [Activity, "Live scoring", "Results sync automatically from ESPN, advancing winners and moving the leaderboard as the Slam plays out."]
           ].map(([Icon, title, body]) => (
             <div key={title as string} className="rounded-lg border border-court-200 bg-white p-5 shadow-sm">
               <Icon className="text-court-700" />
