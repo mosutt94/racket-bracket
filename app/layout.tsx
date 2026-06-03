@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { BfcacheRecovery } from "@/components/BfcacheRecovery";
 
 export const metadata: Metadata = {
   title: "Racket Bracket",
@@ -9,7 +10,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <BfcacheRecovery />
+        {children}
+      </body>
     </html>
   );
 }
