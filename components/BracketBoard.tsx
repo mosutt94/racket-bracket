@@ -68,6 +68,14 @@ function formatLiveScore(score: BracketLiveScore) {
   return setScores || score.scoreSummary || null;
 }
 
+// ESPN stores the stored summary as "Winner (CCC) bt Loser (CCC) 6-3 6-4"; the
+// bracket cards only have room for the score, so trim everything before the
+// first set so it matches the live-score display (e.g. "6-3 6-4").
+function shortenScoreSummary(summary: string): string {
+  const match = summary.match(/\d+-\d+.*$/);
+  return (match ? match[0] : summary).trim();
+}
+
 // Nearest ancestor that actually scrolls vertically. Returns null when the
 // page itself is the scroller (so callers fall back to window). Lets the board
 // work both in the normal page-scroll layout and the app-shell (where a fixed
@@ -405,7 +413,7 @@ export function BracketBoard({
         {liveScore && providerScore ? (
           <p className="mt-1 truncate text-[10px] font-semibold text-slate-500">{providerScore}</p>
         ) : displaysRealMatch && match.scoreSummary ? (
-          <p className="mt-1 truncate text-[10px] font-semibold text-slate-500">{match.scoreSummary}</p>
+          <p className="mt-1 truncate text-[10px] font-semibold text-slate-500">{shortenScoreSummary(match.scoreSummary)}</p>
         ) : null}
         {pickOutcome === "correct" ? (
           <p className="mt-0.5 text-[10px] font-black text-court-700">+{roundPoints} pts</p>
