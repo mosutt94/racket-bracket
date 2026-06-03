@@ -373,16 +373,16 @@ export async function getAppStateForPoolFromSupabase(poolId: string): Promise<Ap
   const tournamentIds = Array.from(new Set((poolTournamentRows ?? []).map((row: any) => row.tournament_id).filter(Boolean)));
   const instanceIds = Array.from(new Set((poolTournamentRows ?? []).map((row: any) => row.tournament_instance_id).filter(Boolean)));
 
-  const [profiles, pools, poolMembers, tennisDataProviders] = await Promise.all([
-    supabase.from("profiles").select("*").range(0, 9999),
-    supabase.from("pools").select("*").eq("id", poolId),
-    supabase.from("pool_members").select("*").eq("pool_id", poolId),
-    supabase.from("tennis_data_providers").select("*").range(0, 9999)
-  ]);
-  [profiles.error, pools.error, poolMembers.error, tennisDataProviders.error].forEach(throwIfError);
-
   // No tournament attached yet (degenerate) — return a minimal but valid state.
   if (tournamentIds.length === 0) {
+    const [profiles, pools, poolMembers, tennisDataProviders, bracketBundle] = await Promise.all([
+      supabase.from("profiles").select("*").range(0, 9999),
+      supabase.from("pools").select("*").eq("id", poolId),
+      supabase.from("pool_members").select("*").eq("pool_id", poolId),
+      supabase.from("tennis_data_providers").select("*").range(0, 9999),
+      getBracketBundle({ poolId })
+    ]);
+    [profiles.error, pools.error, poolMembers.error, tennisDataProviders.error].forEach(throwIfError);
     return {
       profiles: (profiles.data ?? []).map(mapProfile),
       pools: (pools.data ?? []).map(mapPool),
@@ -391,8 +391,8 @@ export async function getAppStateForPoolFromSupabase(poolId: string): Promise<Ap
       rounds: [],
       players: [],
       matches: [],
-      brackets: [],
-      bracketPicks: [],
+      brackets: bracketBundle.brackets,
+      bracketPicks: bracketBundle.picks,
       scoreEvents: [],
       liveScoreSnapshots: [],
       tournamentInstances: [],
@@ -404,21 +404,42 @@ export async function getAppStateForPoolFromSupabase(poolId: string): Promise<Ap
     };
   }
 
-  const [tournaments, rounds, matchesRes, tournamentInstances, drawSlotsRes, providerSyncRuns, manualOverrides] =
-    await Promise.all([
-      supabase.from("tournaments").select("*").in("id", tournamentIds),
-      supabase.from("tournament_rounds").select("*").in("tournament_id", tournamentIds),
-      supabase.from("matches").select("*").in("tournament_id", tournamentIds),
-      instanceIds.length
-        ? supabase.from("tournament_instances").select("*").in("id", instanceIds)
-        : supabase.from("tournament_instances").select("*").in("id", tournamentIds),
-      instanceIds.length
-        ? supabase.from("draw_slots").select("*").in("tournament_instance_id", instanceIds)
-        : supabase.from("draw_slots").select("*").in("tournament_instance_id", tournamentIds),
-      supabase.from("provider_sync_runs").select("*").in("tournament_id", tournamentIds).order("started_at", { ascending: false }),
-      supabase.from("manual_overrides").select("*").in("tournament_id", tournamentIds).order("created_at", { ascending: false })
-    ]);
-  [tournaments.error, rounds.error, matchesRes.error, tournamentInstances.error, drawSlotsRes.error, providerSyncRuns.error, manualOverrides.error].forEach(throwIfError);
+  // One parallel round-trip: the small tables, every tournament-keyed table,
+  // and the bracket bundle together (the bundle only needs poolId), instead of
+  // several sequential waves. Only the players query trails, since it needs ids
+  // discovered from the matches + draw slots.
+  const [
+    profiles,
+    pools,
+    poolMembers,
+    tennisDataProviders,
+    tournaments,
+    rounds,
+    matchesRes,
+    tournamentInstances,
+    drawSlotsRes,
+    providerSyncRuns,
+    manualOverrides,
+    bracketBundle
+  ] = await Promise.all([
+    supabase.from("profiles").select("*").range(0, 9999),
+    supabase.from("pools").select("*").eq("id", poolId),
+    supabase.from("pool_members").select("*").eq("pool_id", poolId),
+    supabase.from("tennis_data_providers").select("*").range(0, 9999),
+    supabase.from("tournaments").select("*").in("id", tournamentIds),
+    supabase.from("tournament_rounds").select("*").in("tournament_id", tournamentIds),
+    supabase.from("matches").select("*").in("tournament_id", tournamentIds),
+    instanceIds.length
+      ? supabase.from("tournament_instances").select("*").in("id", instanceIds)
+      : supabase.from("tournament_instances").select("*").in("id", tournamentIds),
+    instanceIds.length
+      ? supabase.from("draw_slots").select("*").in("tournament_instance_id", instanceIds)
+      : supabase.from("draw_slots").select("*").in("tournament_instance_id", tournamentIds),
+    supabase.from("provider_sync_runs").select("*").in("tournament_id", tournamentIds).order("started_at", { ascending: false }),
+    supabase.from("manual_overrides").select("*").in("tournament_id", tournamentIds).order("created_at", { ascending: false }),
+    getBracketBundle({ poolId })
+  ]);
+  [profiles.error, pools.error, poolMembers.error, tennisDataProviders.error, tournaments.error, rounds.error, matchesRes.error, tournamentInstances.error, drawSlotsRes.error, providerSyncRuns.error, manualOverrides.error].forEach(throwIfError);
 
   const matches = matchesRes.data ?? [];
   const drawSlots = drawSlotsRes.data ?? [];
@@ -439,8 +460,6 @@ export async function getAppStateForPoolFromSupabase(poolId: string): Promise<Ap
     throwIfError(playersRes.error);
     players = playersRes.data ?? [];
   }
-
-  const bracketBundle = await getBracketBundle({ poolId });
 
   return {
     profiles: (profiles.data ?? []).map(mapProfile),
