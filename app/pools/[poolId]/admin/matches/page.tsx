@@ -12,15 +12,15 @@ import type { AppState, Match, Player } from "@/lib/types";
 type Drafts = Record<string, { player1Name: string; player1Country: string; player2Name: string; player2Country: string; scoreSummary: string }>;
 
 export default function MatchManagementPage({ params }: { params: { poolId: string } }) {
-  const [state, setState] = useState<AppState | null>(getCachedAppState);
+  const [state, setState] = useState<AppState | null>(() => getCachedAppState(params.poolId));
   const [roundFilter, setRoundFilter] = useState(1);
   const [drafts, setDrafts] = useState<Drafts>({});
   const [busyMatchId, setBusyMatchId] = useState<string | null>(null);
   const [matchMessage, setMatchMessage] = useState<{ id: string; ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
-    loadAppState().then(setState);
-  }, []);
+    loadAppState(params.poolId).then(setState);
+  }, [params.poolId]);
 
   const tournament = state ? findTournamentForPool(state, params.poolId) : undefined;
   const playerById = useMemo(() => new Map((state?.players ?? []).map((player) => [player.id, player])), [state?.players]);
@@ -57,7 +57,7 @@ export default function MatchManagementPage({ params }: { params: { poolId: stri
   const activeRound = rounds.find((round) => round.roundNumber === roundFilter);
 
   async function reloadState() {
-    setState(await loadAppState());
+    setState(await loadAppState(params.poolId));
   }
 
   async function savePlayer(match: Match, slot: "player1" | "player2") {

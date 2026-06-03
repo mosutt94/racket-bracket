@@ -19,7 +19,7 @@ import { createUuid } from "@/lib/uuid";
 // exists — a brand-new bracket would need a generated id that must match the one
 // the fresh load creates, so we let that one case load normally.
 function deriveCachedInitial(poolId: string): { state: AppState | null; bracket: Bracket | null } {
-  const cached = getCachedAppState();
+  const cached = getCachedAppState(poolId);
   if (!cached) return { state: null, bracket: null };
   const tournament = findTournamentForPool(cached, poolId);
   if (!tournament) return { state: null, bracket: null };
@@ -42,7 +42,7 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
   const saveRequestId = useRef(0);
 
   useEffect(() => {
-    loadAppState().then((loaded) => {
+    loadAppState(params.poolId).then((loaded) => {
       const tournament = findTournamentForPool(loaded, params.poolId);
       if (!tournament) return;
       const user = getCurrentUserForState(loaded);
@@ -66,7 +66,7 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
   const tournament = state ? findTournamentForPool(state, params.poolId) : undefined;
   useAutoSync(tournament, {
     onSynced: async () => {
-      const fresh = await loadAppState();
+      const fresh = await loadAppState(params.poolId);
       setState(fresh);
     }
   });

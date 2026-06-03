@@ -10,10 +10,10 @@ import { findTournamentForPool } from "@/lib/state-helpers";
 import type { AppState } from "@/lib/types";
 
 export default function TournamentBracketPage({ params }: { params: { poolId: string } }) {
-  const [state, setState] = useState<AppState | null>(getCachedAppState);
+  const [state, setState] = useState<AppState | null>(() => getCachedAppState(params.poolId));
   useEffect(() => {
-    loadAppState().then(setState);
-  }, []);
+    loadAppState(params.poolId).then(setState);
+  }, [params.poolId]);
   if (!state) return <PageLoading />;
 
   const pool = state.pools.find((item) => item.id === params.poolId);

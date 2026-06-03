@@ -3,24 +3,33 @@
 import { getSavedCurrentUser } from "@/lib/current-user";
 import type { AppState, Profile } from "@/lib/types";
 
-// Last successfully-loaded state, kept in memory for the SPA session. Pages seed
-// their initial render from this so client-side navigation shows content
-// immediately instead of flashing blank while a fresh /api/state fetch runs.
-let cachedAppState: AppState | null = null;
+// Last successfully-loaded state, kept in memory for the SPA session so pages
+// can seed their initial render and avoid a blank flash on navigation. Keyed by
+// pool — a pool page loads only its own slice, so the full (dashboard) load and
+// each pool's load are cached separately and never overwrite each other.
+let cachedFullState: AppState | null = null;
+const cachedPoolState = new Map<string, AppState>();
 
-/** Synchronously returns the last-loaded app state (or null on a cold start). */
-export function getCachedAppState(): AppState | null {
-  return cachedAppState;
+/** Synchronously returns the last-loaded state for a pool (or the full state). */
+export function getCachedAppState(poolId?: string): AppState | null {
+  if (poolId) return cachedPoolState.get(poolId) ?? null;
+  return cachedFullState;
 }
 
-export async function loadAppState(): Promise<AppState> {
-  const response = await fetch("/api/state", { cache: "no-store" });
+/**
+ * Loads app state. Pass a poolId on pool pages to fetch only that pool's data
+ * (much faster); omit it on the dashboard to get the full cross-pool state.
+ */
+export async function loadAppState(poolId?: string): Promise<AppState> {
+  const url = poolId ? `/api/state?poolId=${encodeURIComponent(poolId)}` : "/api/state";
+  const response = await fetch(url, { cache: "no-store" });
   if (!response.ok) {
     const message = await response.text().catch(() => "");
     throw new Error(`Could not load app state (${response.status}): ${message}`);
   }
   const state = (await response.json()) as AppState;
-  cachedAppState = state;
+  if (poolId) cachedPoolState.set(poolId, state);
+  else cachedFullState = state;
   return state;
 }
 

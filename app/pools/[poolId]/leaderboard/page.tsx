@@ -11,13 +11,13 @@ import { useAutoSync } from "@/lib/use-auto-sync";
 import type { AppState } from "@/lib/types";
 
 export default function LeaderboardPage({ params }: { params: { poolId: string } }) {
-  const [state, setState] = useState<AppState | null>(getCachedAppState);
+  const [state, setState] = useState<AppState | null>(() => getCachedAppState(params.poolId));
   useEffect(() => {
-    loadAppState().then(setState);
-  }, []);
+    loadAppState(params.poolId).then(setState);
+  }, [params.poolId]);
   const tournament = state ? findTournamentForPool(state, params.poolId) : undefined;
   useAutoSync(tournament, {
-    onSynced: async () => setState(await loadAppState())
+    onSynced: async () => setState(await loadAppState(params.poolId))
   });
 
   if (!state) return <PageLoading />;

@@ -16,7 +16,7 @@ export default function PoolEntryPage({ params }: { params: { poolId: string } }
 
   useEffect(() => {
     let cancelled = false;
-    loadAppState().then((state) => {
+    loadAppState(params.poolId).then((state) => {
       if (cancelled) return;
       const pool = state.pools.find((item) => item.id === params.poolId);
       if (!pool) {

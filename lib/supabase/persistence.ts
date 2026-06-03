@@ -349,6 +349,120 @@ export async function getAppStateFromSupabase(): Promise<AppState> {
   };
 }
 
+function mapProviderRow(row: any) {
+  return { id: row.id, name: row.name, enabled: row.enabled, config: row.config, createdAt: row.created_at };
+}
+
+/**
+ * Pool-scoped variant of getAppStateFromSupabase. Returns the same AppState
+ * shape but only the data a single pool's pages need — its tournament's matches,
+ * players, draw slots, rounds, this pool's members + brackets + picks — instead
+ * of every pool's everything. This is the load that runs on the pool pages, so
+ * cold loads stay fast. Cross-pool tables (other pools, their brackets) are
+ * intentionally omitted; pool pages never read them.
+ */
+export async function getAppStateForPoolFromSupabase(poolId: string): Promise<AppState> {
+  const supabase = getClient();
+
+  const { data: poolTournamentRows, error: ptError } = await supabase
+    .from("pool_tournaments")
+    .select("*")
+    .eq("pool_id", poolId);
+  throwIfError(ptError);
+
+  const tournamentIds = Array.from(new Set((poolTournamentRows ?? []).map((row: any) => row.tournament_id).filter(Boolean)));
+  const instanceIds = Array.from(new Set((poolTournamentRows ?? []).map((row: any) => row.tournament_instance_id).filter(Boolean)));
+
+  const [profiles, pools, poolMembers, tennisDataProviders] = await Promise.all([
+    supabase.from("profiles").select("*").range(0, 9999),
+    supabase.from("pools").select("*").eq("id", poolId),
+    supabase.from("pool_members").select("*").eq("pool_id", poolId),
+    supabase.from("tennis_data_providers").select("*").range(0, 9999)
+  ]);
+  [profiles.error, pools.error, poolMembers.error, tennisDataProviders.error].forEach(throwIfError);
+
+  // No tournament attached yet (degenerate) — return a minimal but valid state.
+  if (tournamentIds.length === 0) {
+    return {
+      profiles: (profiles.data ?? []).map(mapProfile),
+      pools: (pools.data ?? []).map(mapPool),
+      poolMembers: (poolMembers.data ?? []).map(mapPoolMember),
+      tournaments: [],
+      rounds: [],
+      players: [],
+      matches: [],
+      brackets: [],
+      bracketPicks: [],
+      scoreEvents: [],
+      liveScoreSnapshots: [],
+      tournamentInstances: [],
+      poolTournaments: (poolTournamentRows ?? []).map(mapPoolTournament),
+      drawSlots: [],
+      providerSyncRuns: [],
+      manualOverrides: [],
+      tennisDataProviders: (tennisDataProviders.data ?? []).map(mapProviderRow)
+    };
+  }
+
+  const [tournaments, rounds, matchesRes, tournamentInstances, drawSlotsRes, providerSyncRuns, manualOverrides] =
+    await Promise.all([
+      supabase.from("tournaments").select("*").in("id", tournamentIds),
+      supabase.from("tournament_rounds").select("*").in("tournament_id", tournamentIds),
+      supabase.from("matches").select("*").in("tournament_id", tournamentIds),
+      instanceIds.length
+        ? supabase.from("tournament_instances").select("*").in("id", instanceIds)
+        : supabase.from("tournament_instances").select("*").in("id", tournamentIds),
+      instanceIds.length
+        ? supabase.from("draw_slots").select("*").in("tournament_instance_id", instanceIds)
+        : supabase.from("draw_slots").select("*").in("tournament_instance_id", tournamentIds),
+      supabase.from("provider_sync_runs").select("*").in("tournament_id", tournamentIds).order("started_at", { ascending: false }),
+      supabase.from("manual_overrides").select("*").in("tournament_id", tournamentIds).order("created_at", { ascending: false })
+    ]);
+  [tournaments.error, rounds.error, matchesRes.error, tournamentInstances.error, drawSlotsRes.error, providerSyncRuns.error, manualOverrides.error].forEach(throwIfError);
+
+  const matches = matchesRes.data ?? [];
+  const drawSlots = drawSlotsRes.data ?? [];
+
+  // players carry no tournament column — collect the ids this draw references.
+  const playerIds = new Set<string>();
+  for (const match of matches) {
+    if (match.player1_id) playerIds.add(match.player1_id);
+    if (match.player2_id) playerIds.add(match.player2_id);
+    if (match.winner_player_id) playerIds.add(match.winner_player_id);
+  }
+  for (const slot of drawSlots) {
+    if (slot.player_id) playerIds.add(slot.player_id);
+  }
+  let players: any[] = [];
+  if (playerIds.size > 0) {
+    const playersRes = await supabase.from("players").select("*").in("id", Array.from(playerIds));
+    throwIfError(playersRes.error);
+    players = playersRes.data ?? [];
+  }
+
+  const bracketBundle = await getBracketBundle({ poolId });
+
+  return {
+    profiles: (profiles.data ?? []).map(mapProfile),
+    pools: (pools.data ?? []).map(mapPool),
+    poolMembers: (poolMembers.data ?? []).map(mapPoolMember),
+    tournaments: (tournaments.data ?? []).map(mapTournament),
+    rounds: (rounds.data ?? []).map(mapRound),
+    players: players.map(mapPlayer),
+    matches: matches.map(mapMatch),
+    brackets: bracketBundle.brackets,
+    bracketPicks: bracketBundle.picks,
+    scoreEvents: [],
+    liveScoreSnapshots: [],
+    tournamentInstances: (tournamentInstances.data ?? []).map(mapTournamentInstance),
+    poolTournaments: (poolTournamentRows ?? []).map(mapPoolTournament),
+    drawSlots: drawSlots.map(mapDrawSlot),
+    providerSyncRuns: (providerSyncRuns.data ?? []).map(mapProviderSyncRun),
+    manualOverrides: (manualOverrides.data ?? []).map(mapManualOverride),
+    tennisDataProviders: (tennisDataProviders.data ?? []).map(mapProviderRow)
+  };
+}
+
 export async function createPool(input: {
   name: string;
   commissionerUserId: string;

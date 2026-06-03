@@ -29,7 +29,7 @@ interface SyncStatus {
 }
 
 export default function AdminPage({ params }: { params: { poolId: string } }) {
-  const [state, setState] = useState<AppState | null>(getCachedAppState);
+  const [state, setState] = useState<AppState | null>(() => getCachedAppState(params.poolId));
   const [busy, setBusy] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [statusBusy, setStatusBusy] = useState<TournamentStatus | null>(null);
@@ -41,8 +41,8 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   const [deleteMessage, setDeleteMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
-    loadAppState().then(setState);
-  }, []);
+    loadAppState(params.poolId).then(setState);
+  }, [params.poolId]);
 
   // Keep the editable scoring rows in sync with loaded state.
   useEffect(() => {
@@ -91,7 +91,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
       });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not update status.");
-      setState(await loadAppState());
+      setState(await loadAppState(params.poolId));
       setStatusMessage({ ok: true, text: status === "picking_open" ? "Picking is now open." : "Picking is now locked." });
     } catch (error) {
       setStatusMessage({ ok: false, text: error instanceof Error ? error.message : "Could not update status." });
@@ -114,7 +114,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
       })
     });
     setSyncStatus(await response.json());
-    setState(await loadAppState());
+    setState(await loadAppState(params.poolId));
     setBusy(false);
   }
 
@@ -133,7 +133,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not save scoring.");
       setScoringSave("saved");
-      setState(await loadAppState());
+      setState(await loadAppState(params.poolId));
     } catch (error) {
       setScoringSave("error");
       setScoringError(error instanceof Error ? error.message : "Could not save scoring.");
@@ -152,7 +152,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
       });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not remove member.");
-      setState(await loadAppState());
+      setState(await loadAppState(params.poolId));
       setDeleteMessage({ ok: true, text: `Removed ${displayName}.` });
     } catch (error) {
       setDeleteMessage({ ok: false, text: error instanceof Error ? error.message : "Could not remove member." });
