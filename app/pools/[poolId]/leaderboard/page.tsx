@@ -4,13 +4,13 @@ import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { PoolNav } from "@/components/PoolNav";
 import { getLeaderboard } from "@/lib/services/scoring-service";
-import { isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
+import { getCachedAppState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import { useAutoSync } from "@/lib/use-auto-sync";
 import type { AppState } from "@/lib/types";
 
 export default function LeaderboardPage({ params }: { params: { poolId: string } }) {
-  const [state, setState] = useState<AppState | null>(null);
+  const [state, setState] = useState<AppState | null>(getCachedAppState);
   useEffect(() => {
     loadAppState().then(setState);
   }, []);

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { BracketBoard } from "@/components/BracketBoard";
 import { PoolNav } from "@/components/PoolNav";
-import { getCurrentUserForState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
+import { getCachedAppState, getCurrentUserForState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
 import { isBracketComplete, pickWinner } from "@/lib/services/bracket-service";
 import { getSlamShortLabel } from "@/lib/services/bracket-shell-service";
 import { findTournamentForPool } from "@/lib/state-helpers";
@@ -13,9 +13,26 @@ import { useAutoSync } from "@/lib/use-auto-sync";
 import type { AppState, Bracket, BracketLiveScore } from "@/lib/types";
 import { createUuid } from "@/lib/uuid";
 
+// Seed the first render from cached state so navigating back to your bracket is
+// instant instead of flashing blank. Only seed when a real bracket already
+// exists — a brand-new bracket would need a generated id that must match the one
+// the fresh load creates, so we let that one case load normally.
+function deriveCachedInitial(poolId: string): { state: AppState | null; bracket: Bracket | null } {
+  const cached = getCachedAppState();
+  if (!cached) return { state: null, bracket: null };
+  const tournament = findTournamentForPool(cached, poolId);
+  if (!tournament) return { state: null, bracket: null };
+  const user = getCurrentUserForState(cached);
+  const serverBracket = cached.brackets.find(
+    (item) => item.poolId === poolId && item.tournamentId === tournament.id && item.userId === user.id
+  );
+  if (!serverBracket) return { state: null, bracket: null };
+  return { state: cached, bracket: serverBracket };
+}
+
 export default function MyBracketPage({ params }: { params: { poolId: string } }) {
-  const [state, setState] = useState<AppState | null>(null);
-  const [bracket, setBracket] = useState<Bracket | null>(null);
+  const [state, setState] = useState<AppState | null>(() => deriveCachedInitial(params.poolId).state);
+  const [bracket, setBracket] = useState<Bracket | null>(() => deriveCachedInitial(params.poolId).bracket);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "submitted" | "error">("idle");
   const [dirty, setDirty] = useState(false);
   const [highlightedMatchId, setHighlightedMatchId] = useState<string | null>(null);

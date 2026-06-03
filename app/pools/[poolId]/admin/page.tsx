@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { PoolNav } from "@/components/PoolNav";
 import { StatusBadge } from "@/components/StatusBadge";
-import { getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
+import { getCachedAppState, getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import type { AppState, TournamentRound, TournamentStatus } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
@@ -28,7 +28,7 @@ interface SyncStatus {
 }
 
 export default function AdminPage({ params }: { params: { poolId: string } }) {
-  const [state, setState] = useState<AppState | null>(null);
+  const [state, setState] = useState<AppState | null>(getCachedAppState);
   const [busy, setBusy] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [statusBusy, setStatusBusy] = useState<TournamentStatus | null>(null);

@@ -4,14 +4,14 @@ import { RotateCcw, Save, Trophy } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { PoolNav } from "@/components/PoolNav";
-import { getCurrentUserForState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
+import { getCachedAppState, getCurrentUserForState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import type { AppState, Match, Player } from "@/lib/types";
 
 type Drafts = Record<string, { player1Name: string; player1Country: string; player2Name: string; player2Country: string; scoreSummary: string }>;
 
 export default function MatchManagementPage({ params }: { params: { poolId: string } }) {
-  const [state, setState] = useState<AppState | null>(null);
+  const [state, setState] = useState<AppState | null>(getCachedAppState);
   const [roundFilter, setRoundFilter] = useState(1);
   const [drafts, setDrafts] = useState<Drafts>({});
   const [busyMatchId, setBusyMatchId] = useState<string | null>(null);
