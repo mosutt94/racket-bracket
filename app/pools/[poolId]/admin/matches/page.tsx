@@ -3,6 +3,7 @@
 import { RotateCcw, Save, Trophy } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
+import { PageLoading } from "@/components/PageLoading";
 import { PoolNav } from "@/components/PoolNav";
 import { getCachedAppState, getCurrentUserForState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
 import { findTournamentForPool } from "@/lib/state-helpers";
@@ -49,7 +50,7 @@ export default function MatchManagementPage({ params }: { params: { poolId: stri
     setDrafts(nextDrafts);
   }, [matches, playerById, state, tournament]);
 
-  if (!state || !tournament) return null;
+  if (!state || !tournament) return <PageLoading />;
   const activeTournament = tournament;
 
   const visibleMatches = matches.filter((match) => match.roundNumber === roundFilter);

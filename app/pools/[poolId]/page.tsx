@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { PageLoading } from "@/components/PageLoading";
 import { loadAppState } from "@/lib/app-state-client";
 import { findTournamentForPool } from "@/lib/state-helpers";
 
@@ -31,5 +32,5 @@ export default function PoolEntryPage({ params }: { params: { poolId: string } }
     };
   }, [params.poolId, router]);
 
-  return null;
+  return <PageLoading />;
 }

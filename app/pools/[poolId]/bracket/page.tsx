@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { BracketBoard } from "@/components/BracketBoard";
+import { PageLoading } from "@/components/PageLoading";
 import { PoolNav } from "@/components/PoolNav";
 import { getCachedAppState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
 import { findTournamentForPool } from "@/lib/state-helpers";
@@ -13,7 +14,7 @@ export default function TournamentBracketPage({ params }: { params: { poolId: st
   useEffect(() => {
     loadAppState().then(setState);
   }, []);
-  if (!state) return null;
+  if (!state) return <PageLoading />;
 
   const pool = state.pools.find((item) => item.id === params.poolId);
   const tournament = findTournamentForPool(state, params.poolId);

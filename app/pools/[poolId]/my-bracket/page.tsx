@@ -4,6 +4,7 @@ import { CheckCircle2, LocateFixed, Save } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { BracketBoard } from "@/components/BracketBoard";
+import { PageLoading } from "@/components/PageLoading";
 import { PoolNav } from "@/components/PoolNav";
 import { getCachedAppState, getCurrentUserForState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
 import { isBracketComplete, pickWinner } from "@/lib/services/bracket-service";
@@ -122,7 +123,7 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
     };
   }, []);
 
-  if (!state || !tournament || !bracket || !activeBracket) return null;
+  if (!state || !tournament || !bracket || !activeBracket) return <PageLoading />;
   const locked = activeBracket.status !== "draft" || tournament.status !== "picking_open";
   const complete = isBracketComplete(activeBracket.id, matches, state.bracketPicks);
   const pickedCount = matches.filter((match) => state.bracketPicks.some((pick) => pick.bracketId === activeBracket.id && pick.matchId === match.id)).length;

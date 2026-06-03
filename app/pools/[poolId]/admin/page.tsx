@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CalendarClock, Lock, Settings, Trash2, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
+import { PageLoading } from "@/components/PageLoading";
 import { PoolNav } from "@/components/PoolNav";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getCachedAppState, getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
@@ -53,7 +54,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
     );
   }, [state, params.poolId]);
 
-  if (!state) return null;
+  if (!state) return <PageLoading />;
 
   const pool = state.pools.find((item) => item.id === params.poolId);
   const tournament = findTournamentForPool(state, params.poolId);

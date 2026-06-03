@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
+import { PageLoading } from "@/components/PageLoading";
 import { PoolNav } from "@/components/PoolNav";
 import { getLeaderboard } from "@/lib/services/scoring-service";
 import { getCachedAppState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
@@ -19,7 +20,7 @@ export default function LeaderboardPage({ params }: { params: { poolId: string }
     onSynced: async () => setState(await loadAppState())
   });
 
-  if (!state) return null;
+  if (!state) return <PageLoading />;
   if (!tournament) return null;
   const leaderboard = getLeaderboard(state, params.poolId, tournament.id);
 

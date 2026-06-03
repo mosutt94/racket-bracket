@@ -5,6 +5,7 @@ import { ArrowRight, Copy, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppFrame } from "@/components/AppFrame";
+import { PageLoading } from "@/components/PageLoading";
 import { getCachedAppState, getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
 import { getSavedCurrentUser } from "@/lib/current-user";
 import { findTournamentForPool } from "@/lib/state-helpers";
@@ -33,7 +34,7 @@ export default function DashboardPage() {
     });
   }, [router]);
 
-  if (!state || !user) return null;
+  if (!state || !user) return <PageLoading />;
   const memberships = state.poolMembers.filter((member) => member.userId === user.id);
   const brackets = state.pools.filter((pool) => memberships.some((member) => member.poolId === pool.id));
 
