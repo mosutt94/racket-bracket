@@ -463,6 +463,66 @@ export async function getAppStateForPoolFromSupabase(poolId: string): Promise<Ap
   };
 }
 
+/**
+ * Dashboard-scoped load: just the pools a user belongs to, their tournaments
+ * (for names), and profiles — no matches, players, draw slots, or brackets. The
+ * dashboard only lists brackets, so this is the lightest load of all.
+ */
+export async function getAppStateForUserFromSupabase(userId: string): Promise<AppState> {
+  const supabase = getClient();
+
+  const { data: memberRows, error: memberError } = await supabase.from("pool_members").select("*").eq("user_id", userId);
+  throwIfError(memberError);
+
+  const [profiles, tennisDataProviders] = await Promise.all([
+    supabase.from("profiles").select("*").range(0, 9999),
+    supabase.from("tennis_data_providers").select("*").range(0, 9999)
+  ]);
+  [profiles.error, tennisDataProviders.error].forEach(throwIfError);
+
+  const poolIds = Array.from(new Set((memberRows ?? []).map((row: any) => row.pool_id)));
+
+  let poolsData: any[] = [];
+  let poolTournamentData: any[] = [];
+  let tournamentsData: any[] = [];
+  if (poolIds.length > 0) {
+    const [pools, poolTournaments] = await Promise.all([
+      supabase.from("pools").select("*").in("id", poolIds),
+      supabase.from("pool_tournaments").select("*").in("pool_id", poolIds)
+    ]);
+    [pools.error, poolTournaments.error].forEach(throwIfError);
+    poolsData = pools.data ?? [];
+    poolTournamentData = poolTournaments.data ?? [];
+
+    const tournamentIds = Array.from(new Set(poolTournamentData.map((row: any) => row.tournament_id).filter(Boolean)));
+    if (tournamentIds.length > 0) {
+      const tournaments = await supabase.from("tournaments").select("*").in("id", tournamentIds);
+      throwIfError(tournaments.error);
+      tournamentsData = tournaments.data ?? [];
+    }
+  }
+
+  return {
+    profiles: (profiles.data ?? []).map(mapProfile),
+    pools: poolsData.map(mapPool),
+    poolMembers: (memberRows ?? []).map(mapPoolMember),
+    tournaments: tournamentsData.map(mapTournament),
+    rounds: [],
+    players: [],
+    matches: [],
+    brackets: [],
+    bracketPicks: [],
+    scoreEvents: [],
+    liveScoreSnapshots: [],
+    tournamentInstances: [],
+    poolTournaments: poolTournamentData.map(mapPoolTournament),
+    drawSlots: [],
+    providerSyncRuns: [],
+    manualOverrides: [],
+    tennisDataProviders: (tennisDataProviders.data ?? []).map(mapProviderRow)
+  };
+}
+
 export async function createPool(input: {
   name: string;
   commissionerUserId: string;

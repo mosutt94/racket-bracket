@@ -6,16 +6,16 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppFrame } from "@/components/AppFrame";
 import { PageLoading } from "@/components/PageLoading";
-import { getCachedAppState, getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
+import { getCachedDashboardState, getCurrentUserForState, loadDashboardState } from "@/lib/app-state-client";
 import { getSavedCurrentUser } from "@/lib/current-user";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import type { AppState, Profile } from "@/lib/types";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [state, setState] = useState<AppState | null>(getCachedAppState);
+  const [state, setState] = useState<AppState | null>(getCachedDashboardState);
   const [user, setUser] = useState<Profile | null>(() => {
-    const cached = getCachedAppState();
+    const cached = getCachedDashboardState();
     return cached && getSavedCurrentUser() ? getCurrentUserForState(cached) : null;
   });
   const [copiedInviteCode, setCopiedInviteCode] = useState<string | null>(null);
@@ -23,12 +23,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setOrigin(window.location.origin);
-    if (!getSavedCurrentUser()) {
+    const saved = getSavedCurrentUser();
+    if (!saved) {
       router.replace("/auth");
       return;
     }
 
-    loadAppState().then((loaded) => {
+    loadDashboardState(saved.id).then((loaded) => {
       setState(loaded);
       setUser(getCurrentUserForState(loaded));
     });
