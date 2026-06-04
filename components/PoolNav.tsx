@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Home } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 import { clearCurrentUser, getSavedCurrentUser } from "@/lib/current-user";
 import { cn } from "@/lib/utils";
 
@@ -29,20 +30,21 @@ export function PoolNav({
     window.location.href = "/";
   }
 
-  // "← Brackets" returns to the cross-bracket overview (/dashboard). Admin is
-  // commissioner-only; scoring config now lives inside the Admin page.
-  const links: Array<[string, string]> = [
-    ["← Brackets", "/dashboard"],
-    ["Tournament", `/pools/${poolId}/bracket`],
-    ["My Bracket", `/pools/${poolId}/my-bracket`],
-    ["Leaderboard", `/pools/${poolId}/leaderboard`],
-    ...(isCommissioner ? ([["Admin", `/pools/${poolId}/admin`]] as Array<[string, string]>) : [])
+  // The home-icon "Brackets" pill returns to the cross-bracket overview
+  // (/dashboard) — a home icon reads as "go to the overview" instead of a back
+  // arrow that implied browser-back. Admin is commissioner-only.
+  const links: Array<{ label: string; href: string; icon?: ReactNode }> = [
+    { label: "Brackets", href: "/dashboard", icon: <Home size={14} /> },
+    { label: "Tournament", href: `/pools/${poolId}/bracket` },
+    { label: "My Bracket", href: `/pools/${poolId}/my-bracket` },
+    { label: "Leaderboard", href: `/pools/${poolId}/leaderboard` },
+    ...(isCommissioner ? [{ label: "Admin", href: `/pools/${poolId}/admin` }] : [])
   ];
 
   return (
     <div className="-mx-4 px-4 sm:mx-0 sm:px-0">
       <nav className={cn("flex flex-wrap items-center gap-2", compact ? "py-1" : "py-3")}>
-        {links.map(([label, href]) => {
+        {links.map(({ label, href, icon }) => {
           const isActive = pathname === href;
           return (
             <Link
@@ -50,13 +52,14 @@ export function PoolNav({
               key={href}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "rounded-full border font-semibold transition",
+                "inline-flex items-center gap-1 rounded-full border font-semibold transition",
                 isActive
                   ? "border-court-700 bg-court-700 text-white"
                   : "border-court-200 bg-white text-slate-700 hover:border-court-300 hover:text-court-700",
                 compact ? "px-2.5 py-1 text-xs" : "px-4 py-2 text-sm"
               )}
             >
+              {icon}
               {label}
             </Link>
           );
