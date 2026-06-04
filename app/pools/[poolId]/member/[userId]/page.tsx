@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { BracketBoard } from "@/components/BracketBoard";
@@ -39,14 +37,6 @@ export default function MemberBracketPage({ params }: { params: { poolId: string
     <AppFrame compact>
       <main className="mx-auto max-w-none px-2 py-1 sm:px-3">
         <PoolNav poolId={params.poolId} compact showAccount isCommissioner={isPoolCommissioner(state, params.poolId)} />
-        <div className="mb-1">
-          <Link
-            href={`/pools/${params.poolId}/leaderboard`}
-            className="inline-flex items-center gap-1 text-sm font-bold text-court-700 hover:text-court-900"
-          >
-            <ArrowLeft size={16} /> Leaderboard
-          </Link>
-        </div>
         {!pickingClosed ? (
           <div className="rounded-xl border border-court-200 bg-white p-6 text-center shadow-sm">
             <h1 className="text-lg font-black text-ink">Brackets are hidden until picking closes</h1>
