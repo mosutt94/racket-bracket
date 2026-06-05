@@ -37,14 +37,9 @@ export function AppFrame({ children, compact = false }: { children: React.ReactN
           </Link>
           <nav className="flex items-center gap-4 text-sm font-semibold text-court-50">
             {user ? (
-              <>
-                <Link href="/dashboard" className="hidden hover:text-ball sm:inline">
-                  Your brackets
-                </Link>
-                <button onClick={signOut} className="rounded-full bg-white px-4 py-2 font-bold text-court-900 hover:bg-court-50">
-                  Sign out
-                </button>
-              </>
+              <button onClick={signOut} className="rounded-full bg-white px-4 py-2 font-bold text-court-900 hover:bg-court-50">
+                Sign out
+              </button>
             ) : (
               <Link href="/auth" className="rounded-full bg-white px-4 py-2 font-bold text-court-900 hover:bg-court-50">
                 Sign in
