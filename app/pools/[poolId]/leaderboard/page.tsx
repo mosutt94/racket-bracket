@@ -36,13 +36,15 @@ export default function LeaderboardPage({ params }: { params: { poolId: string }
 
   return (
     <AppFrame compact>
-      <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
         <PoolNav poolId={params.poolId} showAccount isCommissioner={isPoolCommissioner(state, params.poolId)} />
-        <h1 className="text-2xl font-black text-ink sm:text-3xl">Leaderboard</h1>
-        {pickingClosed ? (
-          <p className="mt-1 text-sm font-semibold text-slate-500">Tap a player to view their bracket.</p>
-        ) : null}
-        <div className="mt-5 overflow-hidden rounded-xl border border-court-200 bg-white shadow-sm">
+        <div className="mb-4 mt-1">
+          <h1 className="text-2xl font-black text-ink sm:text-3xl">Leaderboard</h1>
+          {pickingClosed ? (
+            <p className="mt-1 text-sm font-semibold text-slate-500">Tap a player to view their bracket.</p>
+          ) : null}
+        </div>
+        <div className="max-w-3xl overflow-hidden rounded-xl border border-court-200 bg-white shadow-sm">
           {leaderboard.map((row, index) => {
             const viewable = pickingClosed && hasBracket(row.userId);
             const cells = (
