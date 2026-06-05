@@ -1084,6 +1084,33 @@ export async function joinPoolByEmail(input: { inviteCode: string; email: string
   };
 }
 
+/** Public-ish preview for the join page: the bracket name + who created it. */
+export async function getInvitePreviewInSupabase(inviteCode: string) {
+  const supabase = getClient();
+  const code = inviteCode.trim().toUpperCase();
+
+  const { data: pool, error } = await supabase
+    .from("pools")
+    .select("id, name, commissioner_user_id")
+    .eq("invite_code", code)
+    .maybeSingle();
+  throwIfError(error);
+  if (!pool) return null;
+
+  let commissionerName: string | null = null;
+  if (pool.commissioner_user_id) {
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", pool.commissioner_user_id)
+      .maybeSingle();
+    throwIfError(profileError);
+    commissionerName = profile?.display_name ?? null;
+  }
+
+  return { poolId: pool.id, poolName: pool.name, commissionerName };
+}
+
 export async function getBracketBundle(input: { poolId?: string | null; tournamentId?: string | null; userId?: string | null }) {
   const supabase = getClient();
   // Page through brackets (default PostgREST cap is 1000) so a large number of
