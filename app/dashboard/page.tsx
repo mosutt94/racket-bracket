@@ -143,7 +143,7 @@ export default function DashboardPage() {
                       disabled={deletingPoolId === pool.id}
                       title="Delete my bracket (until picks lock)"
                       aria-label="Delete my bracket"
-                      className="shrink-0 rounded-md p-1 text-slate-300 transition hover:bg-clay-100 hover:text-clay-700 disabled:opacity-50"
+                      className="shrink-0 rounded-md p-1 text-clay-500 transition hover:bg-clay-100 hover:text-clay-700 disabled:opacity-50"
                     >
                       <Trash2 size={16} />
                     </button>
