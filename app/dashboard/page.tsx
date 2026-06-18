@@ -137,6 +137,16 @@ export default function DashboardPage() {
                     <span className="inline-flex items-center gap-1 rounded-full bg-court-100 px-2 py-0.5 text-xs font-black uppercase tracking-wide text-court-700">
                       <Check size={12} /> Completed
                     </span>
+                  ) : canDelete ? (
+                    <button
+                      onClick={() => deleteBracket(pool.id, pool.name)}
+                      disabled={deletingPoolId === pool.id}
+                      title="Delete my bracket (until picks lock)"
+                      aria-label="Delete my bracket"
+                      className="shrink-0 rounded-md p-1 text-slate-300 transition hover:bg-clay-100 hover:text-clay-700 disabled:opacity-50"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   ) : null}
                 </div>
                 <Link href={`/pools/${pool.id}`} className="mt-2 block text-2xl font-black text-ink hover:text-court-700">{pool.name}</Link>
@@ -159,18 +169,6 @@ export default function DashboardPage() {
                     </button>
                   </div>
                 </div>
-                {canDelete ? (
-                  <div className="mt-4 border-t border-slate-100 pt-3">
-                    <button
-                      onClick={() => deleteBracket(pool.id, pool.name)}
-                      disabled={deletingPoolId === pool.id}
-                      className="inline-flex items-center gap-1.5 text-sm font-bold text-clay-700 transition hover:text-clay-500 disabled:opacity-50"
-                    >
-                      <Trash2 size={15} /> {deletingPoolId === pool.id ? "Deleting…" : "Delete my bracket"}
-                    </button>
-                    <p className="mt-1 text-xs text-slate-400">You can delete your bracket until picks lock.</p>
-                  </div>
-                ) : null}
               </article>
             );
           }) : hasHistory ? (
