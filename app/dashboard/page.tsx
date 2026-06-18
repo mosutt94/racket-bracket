@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Check, Copy, Plus } from "lucide-react";
+import { ArrowRight, Check, Copy, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppFrame } from "@/components/AppFrame";
@@ -21,6 +21,8 @@ export default function DashboardPage() {
   const [copiedInviteCode, setCopiedInviteCode] = useState<string | null>(null);
   const [origin, setOrigin] = useState("");
   const [tab, setTab] = useState<"active" | "history">("active");
+  const [deletingPoolId, setDeletingPoolId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -61,6 +63,29 @@ export default function DashboardPage() {
     window.setTimeout(() => setCopiedInviteCode(null), 1600);
   }
 
+  async function deleteBracket(poolId: string, name: string) {
+    if (!user) return;
+    if (!window.confirm(`Delete your bracket for "${name}"? This removes your picks and takes you out of it. You can rejoin with the invite link while picks are still open.`)) return;
+    setDeletingPoolId(poolId);
+    setDeleteError(null);
+    try {
+      const response = await fetch("/api/leave-pool", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ poolId, userId: user.id })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not delete your bracket.");
+      const loaded = await loadDashboardState(user.id);
+      setState(loaded);
+      setUser(getCurrentUserForState(loaded));
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Could not delete your bracket.");
+    } finally {
+      setDeletingPoolId(null);
+    }
+  }
+
   return (
     <AppFrame>
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
@@ -92,10 +117,18 @@ export default function DashboardPage() {
             </button>
           </div>
         ) : null}
+        {deleteError ? (
+          <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{deleteError}</p>
+        ) : null}
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
           {shown.length > 0 ? shown.map((pool) => {
             const tournament = findTournamentForPool(state, pool.id);
             const done = isHistoryPool(pool.id);
+            // Players can delete their own bracket only before the tournament
+            // starts (picks still open). Commissioners manage their pool elsewhere.
+            const isCommissioner = pool.commissionerUserId === user.id;
+            const beforeStart = tournament?.status === "picking_open" || tournament?.status === "setup";
+            const canDelete = !isCommissioner && beforeStart;
             return (
               <article key={pool.id} className="min-w-0 rounded-xl border-2 border-court-200 bg-white p-5 shadow-soft transition hover:border-court-500 hover:shadow-lg">
                 <div className="flex items-center justify-between gap-2">
@@ -126,6 +159,18 @@ export default function DashboardPage() {
                     </button>
                   </div>
                 </div>
+                {canDelete ? (
+                  <div className="mt-4 border-t border-slate-100 pt-3">
+                    <button
+                      onClick={() => deleteBracket(pool.id, pool.name)}
+                      disabled={deletingPoolId === pool.id}
+                      className="inline-flex items-center gap-1.5 text-sm font-bold text-clay-700 transition hover:text-clay-500 disabled:opacity-50"
+                    >
+                      <Trash2 size={15} /> {deletingPoolId === pool.id ? "Deleting…" : "Delete my bracket"}
+                    </button>
+                    <p className="mt-1 text-xs text-slate-400">You can delete your bracket until picks lock.</p>
+                  </div>
+                ) : null}
               </article>
             );
           }) : hasHistory ? (

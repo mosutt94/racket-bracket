@@ -1482,6 +1482,39 @@ export async function recalculateTournamentScoresInSupabase(tournamentId: string
  * removed. Use this to clear "not started" members (including orphaned duplicate
  * profiles) from the roster.
  */
+/**
+ * Self-service: a user deletes their own bracket, but only before the tournament
+ * starts (picks still open). Once it's locked / underway / done, entries are
+ * frozen. Reuses removePoolMemberInSupabase, which also refuses the commissioner.
+ */
+export async function leaveBracketInSupabase(input: { poolId: string; userId: string }) {
+  const supabase = getClient();
+
+  const { data: link, error: linkError } = await supabase
+    .from("pool_tournaments")
+    .select("tournament_id")
+    .eq("pool_id", input.poolId)
+    .limit(1)
+    .maybeSingle();
+  throwIfError(linkError);
+
+  if (link?.tournament_id) {
+    const { data: tournament, error: tournamentError } = await supabase
+      .from("tournaments")
+      .select("status")
+      .eq("id", link.tournament_id)
+      .maybeSingle();
+    throwIfError(tournamentError);
+    const status = tournament?.status;
+    const beforeStart = status === "picking_open" || status === "setup";
+    if (!beforeStart) {
+      throw new Error("This tournament has started — brackets can no longer be deleted.");
+    }
+  }
+
+  return removePoolMemberInSupabase(input);
+}
+
 export async function removePoolMemberInSupabase(input: { poolId: string; userId: string }) {
   const supabase = getClient();
 
