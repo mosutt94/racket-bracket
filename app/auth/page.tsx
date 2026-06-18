@@ -15,6 +15,15 @@ export default function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  // Honor a ?next=/some/path redirect (e.g. the landing "Create a bracket" CTA
+  // sends new commissioners straight to the create form after sign-up). Read
+  // from the URL at call time so we don't need useSearchParams + Suspense.
+  function destination() {
+    if (typeof window === "undefined") return "/dashboard";
+    const next = new URLSearchParams(window.location.search).get("next");
+    return next && next.startsWith("/") ? next : "/dashboard";
+  }
+
   async function submitEmail() {
     if (!email.trim()) {
       setError("Enter your email.");
@@ -40,7 +49,7 @@ export default function AuthPage() {
       }
       if (result.profile) {
         saveCurrentUser(result.profile);
-        router.push("/dashboard");
+        router.push(destination());
         return;
       }
       // New email — ask for a display name.
@@ -72,7 +81,7 @@ export default function AuthPage() {
         return;
       }
       saveCurrentUser(result.profile);
-      router.push("/dashboard");
+      router.push(destination());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sign in.");
     } finally {
@@ -99,7 +108,7 @@ export default function AuthPage() {
         return;
       }
       saveCurrentUser(result.profile);
-      router.push("/dashboard");
+      router.push(destination());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create your profile.");
     } finally {
