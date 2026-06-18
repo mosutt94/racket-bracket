@@ -35,7 +35,7 @@ const headerHeight = 16;
 const liveScoreTone: Record<ProviderMatchStatus, string> = {
   scheduled: "bg-slate-100 text-slate-600",
   live: "bg-clay-100 text-clay-700",
-  completed: "bg-court-900 text-white",
+  completed: "bg-[var(--bracket-accent)] text-white",
   retired: "bg-amber-100 text-amber-800",
   walkover: "bg-amber-100 text-amber-800",
   cancelled: "bg-slate-200 text-slate-700",
@@ -310,7 +310,7 @@ export function BracketBoard({
         id={`match-${match.id}`}
         key={match.id}
         className={cn(
-          "relative scroll-m-24 flex flex-col overflow-hidden rounded-lg border border-court-200 bg-white shadow-sm transition",
+          "relative scroll-m-24 flex flex-col overflow-hidden rounded-lg border border-[var(--bracket-card-border)] bg-white shadow-sm transition",
           highlightedMatchId === match.id && "ring-4 ring-clay-300",
           compact ? "p-3" : "p-2.5"
         )}
@@ -464,7 +464,7 @@ export function BracketBoard({
   const renderBoard = () => (
     <div ref={boardRef} className="relative p-4" style={{ width: contentWidth, minHeight: contentHeight }}>
       <div
-        className="absolute top-0 z-0 h-full bg-court-200"
+        className="absolute top-0 z-0 h-full bg-[var(--bracket-band)]"
         style={{
           left: getX(focusedRoundNumber) + 4,
           width: cardWidth + 24
@@ -507,7 +507,7 @@ export function BracketBoard({
   );
 
   return (
-    <div className="rounded-xl border border-court-200 bg-court-100 shadow-inner">
+    <div className="rounded-xl border border-[var(--bracket-rail-border)] bg-[var(--bracket-rail-bg)] shadow-inner">
       <div ref={headerRef} className="sticky top-0 z-30 border-b border-slate-200 bg-white px-4 py-2">
         <div className="flex items-center justify-between gap-3">
           {title ? (
@@ -547,7 +547,7 @@ export function BracketBoard({
                 className={cn(
                   "min-w-0 rounded-md border py-1.5 text-xs font-black shadow-sm transition",
                   isActive
-                    ? "border-court-900 bg-court-900 text-white"
+                    ? "border-[var(--bracket-accent)] bg-[var(--bracket-accent)] text-white"
                     : "border-court-300 bg-court-100 text-court-900 hover:border-court-400 hover:bg-court-200"
                 )}
                 aria-label={`Jump to ${round.roundName}`}

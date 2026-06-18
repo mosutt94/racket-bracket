@@ -16,6 +16,15 @@
   --court-700: 38 109 48;
   --court-900: 20 58 28;
   --app-bg: #eef2ee;
+
+  /* Bracket-board surface tones. Defaults are the ORIGINAL bespoke greens, so a
+     Wimbledon / unthemed board looks exactly as it did before theming. The slam
+     blocks below retint these to match each tournament. */
+  --bracket-accent: #1a4d3a;      /* active round button + completed badge */
+  --bracket-band: #cdded0;        /* focused-round highlight band */
+  --bracket-rail-bg: #dde7dd;     /* round-selector container fill */
+  --bracket-rail-border: #bccfbe; /* round-selector container border */
+  --bracket-card-border: #c8d3c9; /* match card border */
 }
 
 /* ── GRAND SLAM THEMING ──────────────────────────────────────────────────────
@@ -38,6 +47,11 @@
   --court-700: 163 67 31;
   --court-900: 90 38 20;
   --app-bg: #f7f0ea;
+  --bracket-accent: #5a2614;
+  --bracket-band: #eebfa6;
+  --bracket-rail-bg: #f6ded1;
+  --bracket-rail-border: #eebfa6;
+  --bracket-card-border: #eebfa6;
 }
 
 /* US Open — hard-court navy blue. */
@@ -51,6 +65,11 @@
   --court-700: 31 63 143;
   --court-900: 10 33 96;
   --app-bg: #eef1f9;
+  --bracket-accent: #0a2160;
+  --bracket-band: #b4c6ee;
+  --bracket-rail-bg: #dae3f6;
+  --bracket-rail-border: #b4c6ee;
+  --bracket-card-border: #b4c6ee;
 }
 
 /* Australian Open — white / silver court with a slate accent so controls stay
@@ -65,6 +84,11 @@
   --court-700: 58 70 81;
   --court-900: 30 39 48;
   --app-bg: #f4f6f8;
+  --bracket-accent: #1e2730;
+  --bracket-band: #e2e7eb;
+  --bracket-rail-bg: #f3f5f7;
+  --bracket-rail-border: #e2e7eb;
+  --bracket-card-border: #e2e7eb;
 }
 /* ── END GRAND SLAM THEMING ─────────────────────────────────────────────── */
 
