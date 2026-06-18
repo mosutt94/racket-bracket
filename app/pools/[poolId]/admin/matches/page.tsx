@@ -167,7 +167,7 @@ export default function MatchManagementPage({ params }: { params: { poolId: stri
   }
 
   return (
-    <AppFrame compact>
+    <AppFrame compact slam={tournament?.slamType}>
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <PoolNav poolId={params.poolId} showAccount isCommissioner={isPoolCommissioner(state, params.poolId)} />
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">

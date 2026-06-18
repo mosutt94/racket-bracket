@@ -34,7 +34,7 @@ export default function MemberBracketPage({ params }: { params: { poolId: string
   const pickingClosed = tournament.status !== "picking_open";
 
   return (
-    <AppFrame compact>
+    <AppFrame compact slam={tournament.slamType}>
       <main className="mx-auto max-w-none px-2 py-1 sm:px-3">
         <PoolNav poolId={params.poolId} compact showAccount isCommissioner={isPoolCommissioner(state, params.poolId)} />
         {!pickingClosed ? (

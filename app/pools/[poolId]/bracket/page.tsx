@@ -24,7 +24,7 @@ export default function TournamentBracketPage({ params }: { params: { poolId: st
   const rounds = state.rounds.filter((round) => round.tournamentId === tournament.id);
 
   return (
-    <AppFrame compact>
+    <AppFrame compact slam={tournament.slamType}>
       <main className="mx-auto max-w-none px-2 py-1 sm:px-3">
         <PoolNav poolId={pool.id} compact showAccount isCommissioner={isPoolCommissioner(state, pool.id)} />
         <div className="mb-1">

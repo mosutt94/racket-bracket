@@ -4,7 +4,78 @@
 
 :root {
   color-scheme: light;
+
+  /* Primary accent channels (R G B) consumed by the Tailwind `court` palette.
+     Defaults are the original green — anything not slam-themed is unchanged. */
+  --court-50: 244 251 243;
+  --court-100: 229 245 227;
+  --court-200: 203 233 198;
+  --court-300: 166 217 159;
+  --court-400: 124 192 111;
+  --court-500: 76 154 69;
+  --court-700: 38 109 48;
+  --court-900: 20 58 28;
+  --app-bg: #eef2ee;
 }
+
+/* ── GRAND SLAM THEMING ──────────────────────────────────────────────────────
+   Each pool's AppFrame carries data-slam=<slam_type>, which re-themes the whole
+   `court` accent to that tournament's branding. To DISABLE entirely: delete
+   these four blocks and revert the tailwind.config `court` palette to hex. */
+
+/* Wimbledon — grass-court green. */
+[data-slam="wimbledon"] {
+  --court-50: 238 246 241;
+  --court-100: 210 232 219;
+  --court-200: 168 210 188;
+  --court-300: 111 181 148;
+  --court-400: 47 145 104;
+  --court-500: 13 122 72;
+  --court-700: 0 112 60;
+  --court-900: 16 61 36;
+  --app-bg: #eef5f0;
+}
+
+/* Roland-Garros — terre battue clay orange. */
+[data-slam="french_open"] {
+  --court-50: 251 241 236;
+  --court-100: 246 222 209;
+  --court-200: 238 191 166;
+  --court-300: 226 155 118;
+  --court-400: 212 119 74;
+  --court-500: 196 90 48;
+  --court-700: 163 67 31;
+  --court-900: 90 38 20;
+  --app-bg: #f7f0ea;
+}
+
+/* US Open — hard-court navy blue. */
+[data-slam="us_open"] {
+  --court-50: 238 242 251;
+  --court-100: 218 227 246;
+  --court-200: 180 198 238;
+  --court-300: 132 161 223;
+  --court-400: 80 118 199;
+  --court-500: 47 86 173;
+  --court-700: 31 63 143;
+  --court-900: 10 33 96;
+  --app-bg: #eef1f9;
+}
+
+/* Australian Open — white / silver court with a slate accent so controls stay
+   readable (pure white would be unusable for buttons). */
+[data-slam="australian_open"] {
+  --court-50: 255 255 255;
+  --court-100: 243 245 247;
+  --court-200: 226 231 235;
+  --court-300: 198 206 213;
+  --court-400: 151 163 173;
+  --court-500: 100 114 125;
+  --court-700: 58 70 81;
+  --court-900: 30 39 48;
+  --app-bg: #f4f6f8;
+}
+/* ── END GRAND SLAM THEMING ─────────────────────────────────────────────── */
 
 * {
   box-sizing: border-box;

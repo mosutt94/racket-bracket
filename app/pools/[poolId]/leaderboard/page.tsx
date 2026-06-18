@@ -48,7 +48,7 @@ export default function LeaderboardPage({ params }: { params: { poolId: string }
   const gridCols = pickingClosed ? "grid-cols-[32px_minmax(0,1fr)_auto_16px]" : "grid-cols-[32px_minmax(0,1fr)_auto]";
 
   return (
-    <AppFrame compact>
+    <AppFrame compact slam={tournament.slamType}>
       <main className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
         <PoolNav poolId={params.poolId} showAccount isCommissioner={isPoolCommissioner(state, params.poolId)} />
         <div className="mb-4 mt-1">

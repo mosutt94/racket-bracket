@@ -216,7 +216,7 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
   const SaveButtonIcon = dirty || saveStatus === "saving" || saveStatus === "error" ? Save : CheckCircle2;
 
   return (
-    <AppFrame compact>
+    <AppFrame compact slam={tournament?.slamType}>
       <main className="flex h-[100dvh] flex-col overflow-hidden px-2 pt-1 sm:px-3">
         <div className="mb-1 shrink-0">
           <PoolNav poolId={params.poolId} compact showAccount isCommissioner={isPoolCommissioner(state, params.poolId)} />

@@ -245,7 +245,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   }
 
   return (
-    <AppFrame compact>
+    <AppFrame compact slam={activeTournament.slamType}>
       <main className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
         <PoolNav poolId={activePool.id} showAccount isCommissioner={isCommissioner} />
         {isCommissioner && !hasPassword ? (

@@ -4,10 +4,10 @@ import Link from "next/link";
 import { Trophy } from "lucide-react";
 import { useEffect, useState } from "react";
 import { clearCurrentUser, getSavedCurrentUser } from "@/lib/current-user";
-import type { Profile } from "@/lib/types";
+import type { Profile, SlamType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export function AppFrame({ children, compact = false }: { children: React.ReactNode; compact?: boolean }) {
+export function AppFrame({ children, compact = false, slam }: { children: React.ReactNode; compact?: boolean; slam?: SlamType | null }) {
   const [user, setUser] = useState<Profile | null>(null);
 
   useEffect(() => {
@@ -27,7 +27,9 @@ export function AppFrame({ children, compact = false }: { children: React.ReactN
   }
 
   return (
-    <div className="min-h-screen bg-[#eef2ee]">
+    // data-slam re-themes the `court` accent + page background for this Slam
+    // (see globals.css). Absent on non-pool pages, so they keep the default green.
+    <div data-slam={slam ?? undefined} className="min-h-screen bg-[var(--app-bg)]">
       {!compact ? <header className="bg-court-900 text-white shadow-md">
         <div
           className={cn(

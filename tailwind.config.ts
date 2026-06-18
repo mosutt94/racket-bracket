@@ -5,15 +5,20 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // The primary accent is driven by CSS variables so it can be re-themed
+        // per Grand Slam (see the [data-slam] blocks in globals.css). The :root
+        // defaults are the original green, so anything without a slam theme is
+        // visually unchanged. Channel-triple form keeps Tailwind opacity
+        // modifiers (e.g. bg-court-700/50) working.
         court: {
-          50: "#f4fbf3",
-          100: "#e5f5e3",
-          200: "#cbe9c6",
-          300: "#a6d99f",
-          400: "#7cc06f",
-          500: "#4c9a45",
-          700: "#266d30",
-          900: "#143a1c"
+          50: "rgb(var(--court-50) / <alpha-value>)",
+          100: "rgb(var(--court-100) / <alpha-value>)",
+          200: "rgb(var(--court-200) / <alpha-value>)",
+          300: "rgb(var(--court-300) / <alpha-value>)",
+          400: "rgb(var(--court-400) / <alpha-value>)",
+          500: "rgb(var(--court-500) / <alpha-value>)",
+          700: "rgb(var(--court-700) / <alpha-value>)",
+          900: "rgb(var(--court-900) / <alpha-value>)"
         },
         clay: {
           100: "#fee9dc",
