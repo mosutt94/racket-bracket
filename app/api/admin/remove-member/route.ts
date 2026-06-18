@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isSupabaseConfigured, removePoolMemberInSupabase } from "@/lib/supabase/persistence";
+import { requireCommissionerForPool } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,9 @@ export async function POST(request: Request) {
   if (!poolId || !userId) {
     return NextResponse.json({ ok: false, error: "poolId and userId are required." }, { status: 400 });
   }
+
+  const guard = await requireCommissionerForPool(poolId);
+  if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
 
   try {
     const result = await removePoolMemberInSupabase({ poolId, userId });

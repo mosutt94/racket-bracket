@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import { isSupabaseConfigured, recalculateTournamentScoresInSupabase } from "@/lib/supabase/persistence";
+import { requireCommissionerForTournament } from "@/lib/auth/guard";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   const { tournamentId } = await request.json();
   if (!tournamentId) return NextResponse.json({ ok: false, error: "tournamentId is required." }, { status: 400 });
   if (!isSupabaseConfigured()) return NextResponse.json({ ok: false, error: "Supabase is not configured." }, { status: 400 });
+
+  const guard = await requireCommissionerForTournament(tournamentId);
+  if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
 
   try {
     const scoring = await recalculateTournamentScoresInSupabase(tournamentId);

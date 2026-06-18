@@ -6,23 +6,32 @@ import {
   recordManualMatchUpdate,
   recordManualPlayerSlotUpdate
 } from "@/lib/supabase/persistence";
+import { requireCommissionerForTournament } from "@/lib/auth/guard";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ ok: false, error: "Supabase is not configured." }, { status: 500 });
   }
 
-  const { matchId, winnerPlayerId, scoreSummary, tournamentId, tournamentInstanceId, createdByUserId, status, playerSlot, name, country, clearOverrides } = await request.json();
+  const { matchId, winnerPlayerId, scoreSummary, tournamentId, tournamentInstanceId, status, playerSlot, name, country, clearOverrides } = await request.json();
 
   if (!matchId) {
     return NextResponse.json({ ok: false, error: "matchId is required." }, { status: 400 });
   }
-  if (!clearOverrides && (!tournamentInstanceId || !createdByUserId)) {
+  if (!clearOverrides && !tournamentInstanceId) {
     return NextResponse.json(
-      { ok: false, error: "tournamentInstanceId and createdByUserId are required for manual updates." },
+      { ok: false, error: "tournamentInstanceId is required for manual updates." },
       { status: 400 }
     );
   }
+
+  // Only the commissioner of a pool in this draw may edit matches. The acting
+  // user is taken from the verified cookie, never trusted from the request body.
+  const guard = await requireCommissionerForTournament(tournamentId);
+  if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+  const createdByUserId = guard.userId;
 
   try {
     if (clearOverrides) {

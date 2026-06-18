@@ -10,7 +10,7 @@ import {
   getSlamDisplayName
 } from "@/lib/services/bracket-shell-service";
 import { createUuid } from "@/lib/uuid";
-import type { AppState, BracketStatus, Gender, Match, MatchStatus, NextMatchSlot, PoolRole, ProviderMatch, SlamType, TournamentStatus } from "@/lib/types";
+import type { AppState, BracketStatus, Gender, Match, MatchStatus, NextMatchSlot, Pool, PoolRole, Profile, ProviderMatch, SlamType, TournamentStatus } from "@/lib/types";
 
 type SupabaseClient = ReturnType<typeof createSupabaseServiceClient>;
 
@@ -94,7 +94,10 @@ function mapProfile(row: any) {
     id: row.id,
     email: row.email,
     displayName: row.display_name,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    // Expose only the boolean — NEVER the hash. This is the single chokepoint
+    // for every client-facing Profile, so the hash can't leak through state.
+    hasPassword: Boolean(row.password_hash)
   };
 }
 
@@ -596,6 +599,10 @@ export async function createPoolByEmail(input: {
   slamType: SlamType;
   year: number;
   gender: Gender;
+  // Already-hashed (the route hashes; persistence only stores). Set on the new
+  // commissioner's profile during creation, but only if they don't already have
+  // a password — we never silently overwrite an existing one.
+  passwordHash?: string;
 }) {
   const supabase = getClient();
   const email = input.email.trim().toLowerCase();
@@ -605,6 +612,20 @@ export async function createPoolByEmail(input: {
   if (!email || !displayName) throw new Error("Commissioner email and display name are required.");
 
   const profile = await getOrCreateProfileByEmail(supabase, { email, displayName });
+
+  if (input.passwordHash) {
+    const { data: existing, error: lookupError } = await supabase
+      .from("profiles")
+      .select("password_hash")
+      .eq("id", profile.id)
+      .maybeSingle();
+    throwIfError(lookupError);
+    if (!existing?.password_hash) {
+      throwIfError((await supabase.from("profiles").update({ password_hash: input.passwordHash }).eq("id", profile.id)).error);
+      profile.hasPassword = true;
+    }
+  }
+
   const result = await createPool({
     name: input.name,
     commissionerUserId: profile.id,
@@ -614,6 +635,74 @@ export async function createPoolByEmail(input: {
     gender: input.gender
   });
   return { ...result, profile };
+}
+
+/**
+ * Returns the password hash for an email alongside the (client-safe) profile, or
+ * null if no such email. The hash is for server-side verification only — it is
+ * never part of the returned `profile` and must never be serialized to a client.
+ */
+export async function getCredentialByEmail(email: string): Promise<{ profile: Profile; passwordHash: string | null } | null> {
+  const { data, error } = await getClient()
+    .from("profiles")
+    .select("*")
+    .eq("email", email.trim().toLowerCase())
+    .maybeSingle();
+  throwIfError(error);
+  if (!data) return null;
+  return { profile: mapProfile(data), passwordHash: data.password_hash ?? null };
+}
+
+/** Stores an already-hashed password on a profile. */
+export async function setProfilePasswordHash(userId: string, passwordHash: string): Promise<void> {
+  throwIfError((await getClient().from("profiles").update({ password_hash: passwordHash }).eq("id", userId)).error);
+}
+
+/** True if userId is the commissioner of this specific pool. */
+export async function isCommissionerOfPool(userId: string, poolId: string): Promise<boolean> {
+  const { data, error } = await getClient()
+    .from("pools")
+    .select("id")
+    .eq("id", poolId)
+    .eq("commissioner_user_id", userId)
+    .maybeSingle();
+  throwIfError(error);
+  return Boolean(data);
+}
+
+/**
+ * True if userId commissions ANY pool attached to this tournament. Tournaments
+ * are shared across pools (migration 003), so a tournamentId maps to several
+ * commissioners; any of them may run the tournament-keyed admin actions.
+ */
+export async function isCommissionerOfAnyPoolForTournament(userId: string, tournamentId: string): Promise<boolean> {
+  const supabase = getClient();
+  const { data: links, error } = await supabase
+    .from("pool_tournaments")
+    .select("pool_id")
+    .eq("tournament_id", tournamentId);
+  throwIfError(error);
+  const poolIds = (links ?? []).map((row: any) => row.pool_id);
+  if (poolIds.length === 0) return false;
+  const { data: pools, error: poolError } = await supabase
+    .from("pools")
+    .select("id")
+    .in("id", poolIds)
+    .eq("commissioner_user_id", userId)
+    .limit(1);
+  throwIfError(poolError);
+  return (pools ?? []).length > 0;
+}
+
+/** Resolves the pool for an invite code (used as a proof factor for first-time password set). */
+export async function findPoolByInviteCode(inviteCode: string): Promise<Pool | null> {
+  const { data, error } = await getClient()
+    .from("pools")
+    .select("*")
+    .eq("invite_code", inviteCode.trim().toUpperCase())
+    .maybeSingle();
+  throwIfError(error);
+  return data ? mapPool(data) : null;
 }
 
 export async function getOrCreateProfileByEmailAndAuthenticate(input: { email: string; displayName: string }) {

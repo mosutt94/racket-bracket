@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, Lock, Settings, Trash2, Users } from "lucide-react";
+import { CalendarClock, KeyRound, Lock, Settings, ShieldAlert, Trash2, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { PageLoading } from "@/components/PageLoading";
+import { PasswordField } from "@/components/PasswordField";
 import { PoolNav } from "@/components/PoolNav";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getCachedAppState, getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
+import { saveCurrentUser } from "@/lib/current-user";
+import { validatePassword } from "@/lib/password-rules";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import type { AppState, TournamentRound, TournamentStatus } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
@@ -39,6 +42,18 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   const [scoringError, setScoringError] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [deleteMessage, setDeleteMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  // First-time password set (for commissioners migrating from no password).
+  const [setPw, setSetPw] = useState("");
+  const [setPwConfirm, setSetPwConfirm] = useState("");
+  const [setPwInvite, setSetPwInvite] = useState("");
+  const [setPwState, setSetPwState] = useState<"idle" | "saving">("idle");
+  const [setPwMessage, setSetPwMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  // Change password (for commissioners who already have one).
+  const [curPw, setCurPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [newPwConfirm, setNewPwConfirm] = useState("");
+  const [changePwState, setChangePwState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [changePwError, setChangePwError] = useState<string | null>(null);
 
   useEffect(() => {
     loadAppState(params.poolId).then(setState);
@@ -61,7 +76,9 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   if (!pool || !tournament) return null;
   const activePool = pool;
   const activeTournament = tournament;
-  const isCommissioner = activePool.commissionerUserId === getCurrentUserForState(state).id;
+  const me = getCurrentUserForState(state);
+  const isCommissioner = activePool.commissionerUserId === me.id;
+  const hasPassword = Boolean(me.hasPassword);
   const isPickingOpen = activeTournament.status === "picking_open";
   const isLocked = activeTournament.status === "locked";
   const members = state.poolMembers.filter((member) => member.poolId === activePool.id);
@@ -161,10 +178,115 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
     }
   }
 
+  async function setFirstPassword() {
+    const validationError = validatePassword(setPw);
+    if (validationError) {
+      setSetPwMessage({ ok: false, text: validationError });
+      return;
+    }
+    if (setPw !== setPwConfirm) {
+      setSetPwMessage({ ok: false, text: "Passwords don't match." });
+      return;
+    }
+    setSetPwState("saving");
+    setSetPwMessage(null);
+    try {
+      const response = await fetch("/api/auth/set-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: me.email, inviteCode: setPwInvite, newPassword: setPw })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok || !result.profile) throw new Error(result.error ?? "Could not set your password.");
+      saveCurrentUser(result.profile);
+      setSetPw("");
+      setSetPwConfirm("");
+      setSetPwInvite("");
+      setSetPwMessage({ ok: true, text: "Password set. You'll use it next time you sign in." });
+      setState(await loadAppState(params.poolId));
+    } catch (error) {
+      setSetPwMessage({ ok: false, text: error instanceof Error ? error.message : "Could not set your password." });
+    } finally {
+      setSetPwState("idle");
+    }
+  }
+
+  async function changePassword() {
+    const validationError = validatePassword(newPw);
+    if (validationError) {
+      setChangePwState("error");
+      setChangePwError(validationError);
+      return;
+    }
+    if (newPw !== newPwConfirm) {
+      setChangePwState("error");
+      setChangePwError("New passwords don't match.");
+      return;
+    }
+    setChangePwState("saving");
+    setChangePwError(null);
+    try {
+      const response = await fetch("/api/auth/set-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: me.email, currentPassword: curPw, newPassword: newPw })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not update your password.");
+      if (result.profile) saveCurrentUser(result.profile);
+      setCurPw("");
+      setNewPw("");
+      setNewPwConfirm("");
+      setChangePwState("saved");
+    } catch (error) {
+      setChangePwState("error");
+      setChangePwError(error instanceof Error ? error.message : "Could not update your password.");
+    }
+  }
+
   return (
     <AppFrame compact>
       <main className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
         <PoolNav poolId={activePool.id} showAccount isCommissioner={isCommissioner} />
+        {isCommissioner && !hasPassword ? (
+          <section className="mb-4 mt-1 rounded-xl border border-amber-200 bg-amber-50 p-5">
+            <div className="flex items-center gap-2 text-amber-800">
+              <ShieldAlert size={20} />
+              <h2 className="text-lg font-black">Secure your commissioner account</h2>
+            </div>
+            <p className="mt-1 text-sm text-amber-800">
+              Anyone who knows your email can manage this bracket right now. Set a password so only you can lock picks and edit results.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <PasswordField label="New password" value={setPw} onChange={setSetPw} />
+              <PasswordField label="Confirm password" value={setPwConfirm} onChange={setSetPwConfirm} />
+              <label className="block text-sm font-semibold text-slate-700">
+                Bracket invite code
+                <input
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 uppercase"
+                  value={setPwInvite}
+                  onChange={(event) => setSetPwInvite(event.target.value)}
+                  placeholder={activePool.inviteCode}
+                />
+              </label>
+            </div>
+            <p className="mt-2 text-xs font-semibold text-amber-700">
+              Enter this bracket&apos;s invite code ({activePool.inviteCode}) to confirm it&apos;s really you.
+            </p>
+            {setPwMessage ? (
+              <p className={setPwMessage.ok ? "mt-3 text-sm font-bold text-court-700" : "mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-clay-700"}>
+                {setPwMessage.text}
+              </p>
+            ) : null}
+            <button
+              onClick={setFirstPassword}
+              disabled={setPwState === "saving"}
+              className="mt-4 rounded-lg bg-ink px-4 py-3 font-bold text-white transition hover:bg-court-900 disabled:opacity-50"
+            >
+              {setPwState === "saving" ? "Setting…" : "Set password"}
+            </button>
+          </section>
+        ) : null}
         <div className="mb-4 mt-1">
           <p className="text-xs font-bold uppercase tracking-wide text-court-700 sm:text-sm">Commissioner dashboard</p>
           <h1 className="text-2xl font-black text-ink sm:text-3xl">{activePool.name}</h1>
@@ -339,6 +461,32 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
               {scoringSave === "saving" ? "Saving..." : scoringSave === "saved" ? "Saved" : "Save scoring"}
             </button>
           </section>
+          {isCommissioner && hasPassword ? (
+            <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-2 text-court-700">
+                <KeyRound size={18} />
+                <h2 className="text-lg font-black text-ink">Commissioner password</h2>
+              </div>
+              <p className="mt-1 text-sm text-slate-600">Change the password you use to sign in and manage this bracket.</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <PasswordField label="Current password" value={curPw} onChange={setCurPw} />
+                <PasswordField label="New password" value={newPw} onChange={setNewPw} />
+                <PasswordField label="Confirm new password" value={newPwConfirm} onChange={setNewPwConfirm} />
+              </div>
+              {changePwState === "error" && changePwError ? (
+                <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{changePwError}</p>
+              ) : changePwState === "saved" ? (
+                <p className="mt-3 text-sm font-bold text-court-700">Password updated.</p>
+              ) : null}
+              <button
+                onClick={changePassword}
+                disabled={changePwState === "saving" || !curPw || !newPw}
+                className="mt-4 rounded-lg bg-court-700 px-4 py-3 font-bold text-white disabled:bg-slate-300"
+              >
+                {changePwState === "saving" ? "Saving…" : changePwState === "saved" ? "Saved" : "Update password"}
+              </button>
+            </section>
+          ) : null}
         </div>
       </main>
     </AppFrame>

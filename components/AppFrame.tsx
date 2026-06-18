@@ -14,9 +14,15 @@ export function AppFrame({ children, compact = false }: { children: React.ReactN
     setUser(getSavedCurrentUser());
   }, []);
 
-  function signOut() {
+  async function signOut() {
     clearCurrentUser();
     setUser(null);
+    // Drop the commissioner capability cookie too (httpOnly — JS can't clear it).
+    try {
+      await fetch("/api/auth/sign-out", { method: "POST" });
+    } catch {
+      // Network blip shouldn't trap the user signed in — redirect regardless.
+    }
     window.location.href = "/";
   }
 

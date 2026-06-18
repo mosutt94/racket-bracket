@@ -6,11 +6,15 @@ import {
 } from "@/lib/supabase/persistence";
 
 /**
- * Email-first "sign in by email" endpoint (no password / OTP yet).
- * - POST { email }            → look up only. Returns the profile if it exists,
- *                               otherwise { needsName: true } so the client can
- *                               prompt for a display name.
- * - POST { email, displayName } → create-or-update the profile and return it.
+ * Email-first "sign in by email" endpoint.
+ * - POST { email }            → look up only. Protected (password) accounts
+ *                               return { needsPassword: true } WITHOUT the
+ *                               profile (don't reveal identity pre-auth); a
+ *                               password-less existing user returns the profile;
+ *                               an unknown email returns { needsName: true }.
+ * - POST { email, displayName } → create-or-update a password-less profile and
+ *                               return it. Protected accounts still demand the
+ *                               password instead.
  */
 export async function POST(request: Request) {
   if (!isSupabaseConfigured()) {
@@ -26,15 +30,22 @@ export async function POST(request: Request) {
   }
 
   try {
+    const existing = await findProfileByEmail(trimmedEmail);
+
+    // Protected account: require the password no matter the phase, and never hand
+    // back the profile (or let an unauthenticated caller rename it).
+    if (existing?.hasPassword) {
+      return NextResponse.json({ ok: true, needsPassword: true });
+    }
+
     // Phase 2: a name was provided → create-or-update and sign in.
     if (trimmedName) {
       const profile = await getOrCreateProfileByEmailAndAuthenticate({ email: trimmedEmail, displayName: trimmedName });
       return NextResponse.json({ ok: true, profile });
     }
 
-    // Phase 1: email only → look up. Existing user signs straight in; new user
-    // is told we need a name.
-    const existing = await findProfileByEmail(trimmedEmail);
+    // Phase 1: email only → existing password-less user signs straight in; an
+    // unknown email is told we need a name.
     if (existing) {
       return NextResponse.json({ ok: true, profile: existing });
     }

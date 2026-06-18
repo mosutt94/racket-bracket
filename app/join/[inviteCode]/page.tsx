@@ -5,11 +5,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppFrame } from "@/components/AppFrame";
 import { PageLoading } from "@/components/PageLoading";
+import { PasswordField } from "@/components/PasswordField";
 import { loadDashboardState } from "@/lib/app-state-client";
 import { clearCurrentUser, getSavedCurrentUser, saveCurrentUser } from "@/lib/current-user";
 
 type Preview = { poolId: string; poolName: string; commissionerName: string | null };
-type Phase = "checking" | "invalid" | "signed-in" | "email" | "name";
+type Phase = "checking" | "invalid" | "signed-in" | "email" | "password" | "name";
 
 export default function InviteJoinPage({ params }: { params: { inviteCode: string } }) {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function InviteJoinPage({ params }: { params: { inviteCode: strin
   const [currentName, setCurrentName] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -112,6 +114,12 @@ export default function InviteJoinPage({ params }: { params: { inviteCode: strin
       });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error ?? "Could not continue.");
+      // Protected (commissioner) account — verify the password before joining.
+      if (data.needsPassword) {
+        setBusy(false);
+        setPhase("password");
+        return;
+      }
       if (data.profile) {
         // Existing account — recognized by email, no duplicate created.
         saveCurrentUser(data.profile);
@@ -120,6 +128,34 @@ export default function InviteJoinPage({ params }: { params: { inviteCode: strin
       }
       setBusy(false);
       setPhase("name");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not continue.");
+      setBusy(false);
+    }
+  }
+
+  async function submitPassword() {
+    if (!password) {
+      setError("Enter your password.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/auth/verify-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok || !data.profile) {
+        setError(data.error ?? "That password doesn't match. Try again.");
+        setPassword("");
+        setBusy(false);
+        return;
+      }
+      saveCurrentUser(data.profile);
+      await joinAndGo(data.profile.id);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not continue.");
       setBusy(false);
@@ -153,6 +189,7 @@ export default function InviteJoinPage({ params }: { params: { inviteCode: strin
     clearCurrentUser();
     setCurrentName(null);
     setEmail("");
+    setPassword("");
     setError("");
     setPhase("email");
   }
@@ -235,6 +272,32 @@ export default function InviteJoinPage({ params }: { params: { inviteCode: strin
                 className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-court-700 px-4 py-3 font-bold text-white hover:bg-court-900 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 {busy ? "Checking..." : "Continue"} <ArrowRight size={18} />
+              </button>
+            </>
+          ) : phase === "password" ? (
+            <>
+              <p className="text-sm font-black uppercase tracking-wide text-court-700">You&apos;re invited 🎾</p>
+              <h1 className="mt-2 text-2xl font-black text-ink sm:text-3xl">Join {preview?.poolName}</h1>
+              <p className="mt-4 text-sm leading-6 text-slate-600">
+                This account is protected — enter your password to join.
+              </p>
+              <div className="mt-5">
+                <PasswordField label="Password" autoFocus value={password} onChange={setPassword} onEnter={submitPassword} />
+              </div>
+              {errorBox}
+              <button
+                onClick={submitPassword}
+                disabled={busy || !password}
+                className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-court-700 px-4 py-3 font-bold text-white hover:bg-court-900 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {busy ? "Joining..." : "Join this bracket"} <ArrowRight size={18} />
+              </button>
+              <button
+                onClick={useDifferentEmail}
+                disabled={busy}
+                className="mt-3 w-full text-center text-sm font-semibold text-slate-500 hover:text-court-700 disabled:opacity-50"
+              >
+                Use a different email
               </button>
             </>
           ) : (

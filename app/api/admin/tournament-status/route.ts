@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { isSupabaseConfigured, setTournamentStatusInSupabase } from "@/lib/supabase/persistence";
+import { requireCommissionerForTournament } from "@/lib/auth/guard";
 import type { TournamentStatus } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
 
 const ALLOWED: ReadonlyArray<TournamentStatus> = ["setup", "picking_open", "locked", "in_progress", "completed"];
 
@@ -13,6 +16,9 @@ export async function POST(request: Request) {
   if (!tournamentId || !ALLOWED.includes(status)) {
     return NextResponse.json({ ok: false, error: "tournamentId and a valid status are required." }, { status: 400 });
   }
+
+  const guard = await requireCommissionerForTournament(tournamentId);
+  if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
 
   try {
     await setTournamentStatusInSupabase({ tournamentId, status });

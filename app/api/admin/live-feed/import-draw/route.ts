@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { EspnTennisProvider } from "@/lib/providers/espn-tennis-provider";
 import { buildEspnMappingPreview } from "@/lib/services/espn-mapping-service";
 import { getAppStateFromSupabase, importEspnDrawInSupabase, isSupabaseConfigured } from "@/lib/supabase/persistence";
+import { requireCommissionerForTournament } from "@/lib/auth/guard";
 import type { Gender, SlamType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,10 @@ export async function POST(request: Request) {
   if (!tournamentId) {
     return NextResponse.json({ ok: false, error: "tournamentId is required." }, { status: 400 });
   }
+
+  // Destructive (can reset existing picks) — gate firmly to the commissioner.
+  const guard = await requireCommissionerForTournament(tournamentId);
+  if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
 
   try {
     const provider = new EspnTennisProvider();

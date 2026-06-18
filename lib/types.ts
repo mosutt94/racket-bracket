@@ -16,6 +16,10 @@ export interface Profile {
   email: string;
   displayName: string;
   createdAt: string;
+  // Derived from password_hash being set — true for protected (commissioner)
+  // accounts. The hash itself is never sent to the client. Drives which UI to
+  // show; the server always re-verifies.
+  hasPassword?: boolean;
 }
 
 export interface Pool {

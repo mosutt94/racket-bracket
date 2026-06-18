@@ -25,8 +25,13 @@ export function PoolNav({
     if (showAccount) setDisplayName(getSavedCurrentUser()?.displayName ?? null);
   }, [showAccount]);
 
-  function signOut() {
+  async function signOut() {
     clearCurrentUser();
+    try {
+      await fetch("/api/auth/sign-out", { method: "POST" });
+    } catch {
+      // Ignore — redirect regardless.
+    }
     window.location.href = "/";
   }
 

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { isSupabaseConfigured, updateTournamentScoringInSupabase } from "@/lib/supabase/persistence";
+import { requireCommissionerForTournament } from "@/lib/auth/guard";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   if (!isSupabaseConfigured()) {
@@ -13,6 +16,9 @@ export async function POST(request: Request) {
   if (!tournamentId || !rounds) {
     return NextResponse.json({ ok: false, error: "tournamentId and rounds are required." }, { status: 400 });
   }
+
+  const guard = await requireCommissionerForTournament(tournamentId);
+  if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
 
   const normalized = rounds
     .filter((round: any) => Number.isInteger(round?.roundNumber) && Number.isFinite(round?.pointsPerCorrectPick))
