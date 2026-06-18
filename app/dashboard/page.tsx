@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Copy, Plus } from "lucide-react";
+import { ArrowRight, Check, Copy, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppFrame } from "@/components/AppFrame";
@@ -20,6 +20,7 @@ export default function DashboardPage() {
   });
   const [copiedInviteCode, setCopiedInviteCode] = useState<string | null>(null);
   const [origin, setOrigin] = useState("");
+  const [tab, setTab] = useState<"active" | "history">("active");
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -38,6 +39,20 @@ export default function DashboardPage() {
   if (!state || !user) return <PageLoading />;
   const memberships = state.poolMembers.filter((member) => member.userId === user.id);
   const brackets = state.pools.filter((pool) => memberships.some((member) => member.poolId === pool.id));
+
+  // A bracket moves into History a few days after its Slam wraps, so the final
+  // standings linger on the main view briefly before being filed away.
+  const HISTORY_AFTER_DAYS = 5;
+  const isHistoryPool = (poolId: string) => {
+    const completedAt = findTournamentForPool(state, poolId)?.completedAt;
+    if (!completedAt) return false;
+    return Date.now() - new Date(completedAt).getTime() >= HISTORY_AFTER_DAYS * 24 * 60 * 60 * 1000;
+  };
+  const activeBrackets = brackets.filter((pool) => !isHistoryPool(pool.id));
+  const historyBrackets = brackets.filter((pool) => isHistoryPool(pool.id));
+  const hasHistory = historyBrackets.length > 0;
+  // No point showing tabs until there's anything in History.
+  const shown = !hasHistory ? brackets : tab === "history" ? historyBrackets : activeBrackets;
 
   async function copyInviteLink(inviteCode: string) {
     const inviteLink = `${window.location.origin}/join/${inviteCode}`;
@@ -61,12 +76,36 @@ export default function DashboardPage() {
             </Link>
           </div>
         </div>
-        <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2">
-          {brackets.length > 0 ? brackets.map((pool) => {
+        {hasHistory ? (
+          <div className="mt-6 flex gap-2">
+            <button
+              onClick={() => setTab("active")}
+              className={`rounded-full border px-4 py-2 text-sm font-bold transition ${tab === "active" ? "border-court-700 bg-court-700 text-white" : "border-court-200 bg-white text-slate-700 hover:border-court-300 hover:text-court-700"}`}
+            >
+              Active ({activeBrackets.length})
+            </button>
+            <button
+              onClick={() => setTab("history")}
+              className={`rounded-full border px-4 py-2 text-sm font-bold transition ${tab === "history" ? "border-court-700 bg-court-700 text-white" : "border-court-200 bg-white text-slate-700 hover:border-court-300 hover:text-court-700"}`}
+            >
+              History ({historyBrackets.length})
+            </button>
+          </div>
+        ) : null}
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+          {shown.length > 0 ? shown.map((pool) => {
             const tournament = findTournamentForPool(state, pool.id);
+            const done = isHistoryPool(pool.id);
             return (
               <article key={pool.id} className="min-w-0 rounded-xl border-2 border-court-200 bg-white p-5 shadow-soft transition hover:border-court-500 hover:shadow-lg">
-                <p className="text-xs font-bold uppercase tracking-wide text-court-700">Invite {pool.inviteCode}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-bold uppercase tracking-wide text-court-700">Invite {pool.inviteCode}</p>
+                  {done ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-court-100 px-2 py-0.5 text-xs font-black uppercase tracking-wide text-court-700">
+                      <Check size={12} /> Completed
+                    </span>
+                  ) : null}
+                </div>
                 <Link href={`/pools/${pool.id}`} className="mt-2 block text-2xl font-black text-ink hover:text-court-700">{pool.name}</Link>
                 <p className="mt-1 text-sm text-slate-600">{tournament?.name ?? "No active tournament"}</p>
                 <Link
@@ -89,7 +128,12 @@ export default function DashboardPage() {
                 </div>
               </article>
             );
-          }) : (
+          }) : hasHistory ? (
+            <div className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
+              <h2 className="text-xl font-black text-ink">No active brackets</h2>
+              <p className="mt-2 text-sm text-slate-600">Your finished brackets are in History. Create a new one to get back in the game.</p>
+            </div>
+          ) : (
             <div className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
               <h2 className="text-xl font-black text-ink">No brackets yet</h2>
               <p className="mt-2 text-sm text-slate-600">Create a bracket or join one with an invite code.</p>

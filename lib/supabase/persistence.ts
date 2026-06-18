@@ -111,7 +111,8 @@ function mapTournament(row: any) {
     pickingDeadline: row.picking_deadline,
     createdAt: row.created_at,
     externalProviderId: row.external_provider_id,
-    lastSyncedAt: row.last_synced_at
+    lastSyncedAt: row.last_synced_at,
+    completedAt: row.completed_at ?? null
   };
 }
 
@@ -1574,20 +1575,31 @@ export async function syncEspnLiveUpdatesInSupabase(input: {
     }
   }
 
+  // Has the whole draw been decided? Once every match is completed the Slam is
+  // over, which overrides the "leave picking open" rule below.
+  const { count: undecidedCount } = await supabase
+    .from("matches")
+    .select("id", { count: "exact", head: true })
+    .eq("tournament_id", input.tournamentId)
+    .neq("status", "completed");
+  const allComplete = undecidedCount === 0;
+
   // Picking is commissioner-controlled (Admin lock/unlock). The results sync
   // must not silently re-lock it: if picking is intentionally open, leave it
   // open even as live results arrive. Otherwise advance to in_progress once
-  // results start flowing.
-  const tournamentStatus: TournamentStatus =
-    tournament.status === "picking_open"
+  // results start flowing — and to completed once the final lands.
+  const tournamentStatus: TournamentStatus = allComplete
+    ? "completed"
+    : tournament.status === "picking_open"
       ? "picking_open"
       : winnersApplied > 0 || matchesUpdated > 0
         ? "in_progress"
         : tournament.status;
-  throwIfError((await supabase.from("tournaments").update({
-    status: tournamentStatus,
-    last_synced_at: now
-  }).eq("id", input.tournamentId)).error);
+  // Stamp the completion time the first time we observe a finished draw; never
+  // overwrite it on later syncs.
+  const tournamentUpdate: Record<string, unknown> = { status: tournamentStatus, last_synced_at: now };
+  if (allComplete && !tournament.completedAt) tournamentUpdate.completed_at = now;
+  throwIfError((await supabase.from("tournaments").update(tournamentUpdate).eq("id", input.tournamentId)).error);
   throwIfError((await supabase.from("tournament_instances").update({
     status: tournamentStatus === "completed" ? "completed" : "in_progress",
     last_synced_at: now

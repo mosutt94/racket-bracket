@@ -47,6 +47,9 @@ export interface Tournament {
   createdAt: string;
   externalProviderId?: string | null;
   lastSyncedAt?: string | null;
+  // Set the first time the whole draw is decided. Drives the dashboard's
+  // Active vs. History split. Never cleared once set.
+  completedAt?: string | null;
 }
 
 export interface TournamentRound {
