@@ -38,11 +38,11 @@ export interface SlamCalendarDefaults {
 const ROUND_DEFAULTS: ReadonlyArray<RoundDefinition> = [
   { roundNumber: 1, roundName: "Round of 128", pointsPerCorrectPick: 1 },
   { roundNumber: 2, roundName: "Round of 64", pointsPerCorrectPick: 2 },
-  { roundNumber: 3, roundName: "Round of 32", pointsPerCorrectPick: 4 },
-  { roundNumber: 4, roundName: "Round of 16", pointsPerCorrectPick: 8 },
-  { roundNumber: 5, roundName: "Quarterfinal", pointsPerCorrectPick: 16 },
-  { roundNumber: 6, roundName: "Semifinal", pointsPerCorrectPick: 32 },
-  { roundNumber: 7, roundName: "Final", pointsPerCorrectPick: 64 }
+  { roundNumber: 3, roundName: "Round of 32", pointsPerCorrectPick: 3 },
+  { roundNumber: 4, roundName: "Round of 16", pointsPerCorrectPick: 5 },
+  { roundNumber: 5, roundName: "Quarterfinal", pointsPerCorrectPick: 10 },
+  { roundNumber: 6, roundName: "Semifinal", pointsPerCorrectPick: 20 },
+  { roundNumber: 7, roundName: "Final", pointsPerCorrectPick: 30 }
 ];
 
 export function getDefaultRoundDefinitions(): RoundDefinition[] {
