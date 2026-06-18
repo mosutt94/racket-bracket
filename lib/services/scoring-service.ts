@@ -94,6 +94,9 @@ export function getLeaderboard(state: AppState, poolId: string, tournamentId: st
       // (player not eliminated, match undecided). Mirrors the bracket page.
       let score = 0;
       let potentialScore = 0;
+      // Count of picks that have come true so far — independent of point value,
+      // so a volume leader can differ from the points leader.
+      let correctPicks = 0;
       for (const pick of bracket ? picksByBracket.get(bracket.id) ?? [] : []) {
         if (!pick.pickedWinnerPlayerId) continue;
         const match = matchById.get(pick.matchId);
@@ -103,6 +106,7 @@ export function getLeaderboard(state: AppState, poolId: string, tournamentId: st
           if (pick.pickedWinnerPlayerId === match.winnerPlayerId) {
             score += pts;
             potentialScore += pts;
+            correctPicks += 1;
           }
         } else if (!eliminated.has(pick.pickedWinnerPlayerId)) {
           potentialScore += pts;
@@ -114,6 +118,7 @@ export function getLeaderboard(state: AppState, poolId: string, tournamentId: st
         role: member.role,
         score,
         potentialScore,
+        correctPicks,
         bracketStatus: bracket?.status ?? "draft"
       };
     })

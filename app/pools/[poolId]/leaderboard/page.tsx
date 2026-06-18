@@ -90,9 +90,14 @@ export default function LeaderboardPage({ params }: { params: { poolId: string }
                   <span className="block truncate font-bold">{row.displayName}</span>
                   <span className="block truncate text-xs text-slate-500">{row.role} · {row.bracketStatus}</span>
                 </span>
-                <span className="text-right text-lg font-black" title="Current score / potential if all remaining picks hit">
-                  <span className="text-court-700">{row.score}</span>
-                  <span className="text-slate-400">/{row.potentialScore}</span>
+                <span className="text-right">
+                  <span className="block text-lg font-black" title="Current score / potential if all remaining picks hit">
+                    <span className="text-court-700">{row.score}</span>
+                    <span className="text-slate-400">/{row.potentialScore}</span>
+                  </span>
+                  <span className="block text-xs font-semibold text-slate-500" title="Picks that have come true so far, regardless of point value">
+                    {row.correctPicks} correct
+                  </span>
                 </span>
                 {viewable ? <ChevronRight size={16} className="shrink-0 text-slate-300" /> : null}
               </>
