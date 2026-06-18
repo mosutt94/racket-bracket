@@ -23,18 +23,9 @@
    `court` accent to that tournament's branding. To DISABLE entirely: delete
    these four blocks and revert the tailwind.config `court` palette to hex. */
 
-/* Wimbledon — grass-court green. */
-[data-slam="wimbledon"] {
-  --court-50: 238 246 241;
-  --court-100: 210 232 219;
-  --court-200: 168 210 188;
-  --court-300: 111 181 148;
-  --court-400: 47 145 104;
-  --court-500: 13 122 72;
-  --court-700: 0 112 60;
-  --court-900: 16 61 36;
-  --app-bg: #eef5f0;
-}
+/* Wimbledon intentionally has NO override — it falls through to the :root
+   default green, which already reads as grass-court green and looks better
+   than a bespoke Wimbledon palette. */
 
 /* Roland-Garros — terre battue clay orange. */
 [data-slam="french_open"] {
