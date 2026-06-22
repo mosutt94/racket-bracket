@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, KeyRound, Lock, Settings, ShieldAlert, Trash2, Users } from "lucide-react";
+import { CalendarClock, Download, KeyRound, Lock, Settings, ShieldAlert, Trash2, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { PageLoading } from "@/components/PageLoading";
@@ -35,6 +35,9 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   const [state, setState] = useState<AppState | null>(() => getCachedAppState(params.poolId));
   const [busy, setBusy] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importStatus, setImportStatus] = useState<{ ok: boolean; text: string } | null>(null);
+  const [importNeedsReset, setImportNeedsReset] = useState(false);
   const [statusBusy, setStatusBusy] = useState<TournamentStatus | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [scoringRounds, setScoringRounds] = useState<TournamentRound[]>([]);
@@ -114,6 +117,56 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
       setStatusMessage({ ok: false, text: error instanceof Error ? error.message : "Could not update status." });
     } finally {
       setStatusBusy(null);
+    }
+  }
+
+  async function importDraw(resetExistingPicks = false) {
+    setImportBusy(true);
+    setImportStatus(null);
+    if (!resetExistingPicks) setImportNeedsReset(false);
+    try {
+      const response = await fetch("/api/admin/live-feed/import-draw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tournamentId: activeTournament.id,
+          slamType: activeTournament.slamType,
+          year: activeTournament.year,
+          gender: activeTournament.gender,
+          resetExistingPicks
+        })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        // Provisional pre-draw picks block a plain import — offer the reset path.
+        if (!resetExistingPicks && /picks exist/i.test(result.error ?? "")) {
+          setImportNeedsReset(true);
+          setImportStatus({
+            ok: false,
+            text: "Brackets already have picks for this tournament. Importing the published draw will clear them so everyone re-picks against the real bracket."
+          });
+          return;
+        }
+        throw new Error(result.error ?? "Could not import the draw.");
+      }
+      setImportNeedsReset(false);
+      setState(await loadAppState(params.poolId));
+      setImportStatus({
+        ok: true,
+        text: result.warning
+          ? `Imported, but: ${result.warning}`
+          : "Draw imported from ESPN. If you still see TBD, ESPN hasn't published the bracket yet — try again later."
+      });
+    } catch (error) {
+      setImportStatus({ ok: false, text: error instanceof Error ? error.message : "Could not import the draw." });
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  function confirmResetImport() {
+    if (window.confirm("This clears ALL picks for this tournament so everyone re-picks against the newly published draw. This can't be undone. Continue?")) {
+      importDraw(true);
     }
   }
 
@@ -326,6 +379,35 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
                   {syncStatus.ok
                     ? `Updated ${syncStatus.matchesUpdated ?? 0} matches, applied ${syncStatus.winnersApplied ?? 0} winners, advanced ${syncStatus.matchesAdvanced ?? 0} slots, rescored ${syncStatus.scoring?.bracketsScored ?? 0} brackets.`
                     : syncStatus.error ?? "Could not apply ESPN results."}
+                </p>
+              ) : null}
+            </div>
+          </section>
+          <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm lg:col-span-2">
+            <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+              <div>
+                <div className="flex items-center gap-2 text-court-700">
+                  <Download size={18} />
+                  <p className="text-xs font-black uppercase tracking-wide">Import draw</p>
+                </div>
+                <h2 className="mt-2 text-xl font-black text-ink">First-round matchups</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  When ESPN publishes the {activeTournament.name} bracket, pull the first-round matchups to replace the TBDs. Safe to run anytime before picks are made.
+                </p>
+              </div>
+              <div className="grid gap-2 md:min-w-[220px]">
+                <button onClick={() => importDraw(false)} disabled={importBusy} className="rounded-lg bg-ink px-4 py-3 font-bold text-white disabled:bg-slate-300">
+                  {importBusy ? "Importing..." : "Import draw from ESPN"}
+                </button>
+                {importNeedsReset ? (
+                  <button onClick={confirmResetImport} disabled={importBusy} className="rounded-lg bg-clay-700 px-4 py-3 font-bold text-white disabled:bg-slate-300">
+                    {importBusy ? "Replacing…" : "Replace draw & clear all picks"}
+                  </button>
+                ) : null}
+              </div>
+              {importStatus ? (
+                <p className={importStatus.ok ? "mt-3 text-sm font-bold text-court-700" : "mt-3 text-sm font-bold text-clay-700"}>
+                  {importStatus.text}
                 </p>
               ) : null}
             </div>
