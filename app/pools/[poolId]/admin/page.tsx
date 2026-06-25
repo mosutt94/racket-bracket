@@ -57,9 +57,20 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   const [newPwConfirm, setNewPwConfirm] = useState("");
   const [changePwState, setChangePwState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [changePwError, setChangePwError] = useState<string | null>(null);
+  // Verified commissioner session (the httpOnly cookie userId, or null if none).
+  // undefined = not checked yet. Re-auth prompt (for a password-protected
+  // commissioner whose session isn't established on this device/browser).
+  const [sessionUserId, setSessionUserId] = useState<string | null | undefined>(undefined);
+  const [reauthPw, setReauthPw] = useState("");
+  const [reauthBusy, setReauthBusy] = useState(false);
+  const [reauthError, setReauthError] = useState<string | null>(null);
 
   useEffect(() => {
     loadAppState(params.poolId).then(setState);
+    fetch("/api/auth/commissioner-status")
+      .then((r) => r.json())
+      .then((d) => setSessionUserId(d.userId ?? null))
+      .catch(() => setSessionUserId(null));
   }, [params.poolId]);
 
   // Keep the editable scoring rows in sync with loaded state.
@@ -82,6 +93,9 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   const me = getCurrentUserForState(state);
   const isCommissioner = activePool.commissionerUserId === me.id;
   const hasPassword = Boolean(me.hasPassword);
+  // A password-protected commissioner whose verified session isn't established
+  // on this device — admin actions would fail until they confirm their password.
+  const needsReauth = isCommissioner && hasPassword && sessionUserId !== undefined && sessionUserId !== me.id;
   const isPickingOpen = activeTournament.status === "picking_open";
   const isLocked = activeTournament.status === "locked";
   const members = state.poolMembers.filter((member) => member.poolId === activePool.id);
@@ -231,6 +245,30 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
     }
   }
 
+  async function reauth() {
+    if (!reauthPw) {
+      setReauthError("Enter your password.");
+      return;
+    }
+    setReauthBusy(true);
+    setReauthError(null);
+    try {
+      const response = await fetch("/api/auth/verify-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: me.email, password: reauthPw })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok || !result.profile) throw new Error(result.error ?? "That password doesn't match.");
+      setReauthPw("");
+      setSessionUserId(me.id);
+    } catch (error) {
+      setReauthError(error instanceof Error ? error.message : "That password doesn't match.");
+    } finally {
+      setReauthBusy(false);
+    }
+  }
+
   async function setFirstPassword() {
     const validationError = validatePassword(setPw);
     if (validationError) {
@@ -301,6 +339,28 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
     <AppFrame compact slam={activeTournament.slamType}>
       <main className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
         <PoolNav poolId={activePool.id} showAccount isCommissioner={isCommissioner} />
+        {needsReauth ? (
+          <section className="mb-4 mt-1 rounded-xl border border-court-300 bg-court-50 p-5">
+            <div className="flex items-center gap-2 text-court-700">
+              <KeyRound size={20} />
+              <h2 className="text-lg font-black text-ink">Confirm your password to manage this bracket</h2>
+            </div>
+            <p className="mt-1 text-sm text-slate-600">
+              You&apos;re signed in, but this device hasn&apos;t verified your commissioner password yet — so admin actions (sync, import, lock picks) are blocked until you confirm it.
+            </p>
+            <div className="mt-4 flex flex-col gap-3 sm:max-w-md">
+              <PasswordField label="Commissioner password" value={reauthPw} onChange={setReauthPw} onEnter={reauth} />
+              {reauthError ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{reauthError}</p> : null}
+              <button
+                onClick={reauth}
+                disabled={reauthBusy}
+                className="rounded-lg bg-court-700 px-4 py-3 font-bold text-white transition hover:bg-court-900 disabled:opacity-50 sm:w-auto sm:self-start sm:px-6"
+              >
+                {reauthBusy ? "Confirming…" : "Confirm password"}
+              </button>
+            </div>
+          </section>
+        ) : null}
         {isCommissioner && !hasPassword ? (
           <section className="mb-4 mt-1 rounded-xl border border-amber-200 bg-amber-50 p-5">
             <div className="flex items-center gap-2 text-amber-800">
