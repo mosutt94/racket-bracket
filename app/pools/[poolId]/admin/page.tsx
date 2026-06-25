@@ -437,7 +437,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
               {syncStatus ? (
                 <p className={syncStatus.ok ? "mt-3 text-sm font-bold text-court-700" : "mt-3 text-sm font-bold text-clay-700"}>
                   {syncStatus.ok
-                    ? `Updated ${syncStatus.matchesUpdated ?? 0} matches, applied ${syncStatus.winnersApplied ?? 0} winners, advanced ${syncStatus.matchesAdvanced ?? 0} slots, rescored ${syncStatus.scoring?.bracketsScored ?? 0} brackets.`
+                    ? `Updated ${syncStatus.matchesUpdated ?? 0} matches and applied ${syncStatus.winnersApplied ?? 0} new results.`
                     : syncStatus.error ?? "Could not apply ESPN results."}
                 </p>
               ) : null}
