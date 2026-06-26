@@ -399,6 +399,8 @@ export function BracketBoard({
                   ) : null}
                   {player?.seed ? (
                     <span className={cn("text-xs font-semibold", showAsOut && !isPicked ? "text-slate-400" : "text-slate-500")}>[{player.seed}]</span>
+                  ) : player?.designation ? (
+                    <span className={cn("text-xs font-semibold", showAsOut && !isPicked ? "text-slate-400" : "text-slate-500")}>[{player.designation}]</span>
                   ) : null}
                   {isWinner ? (
                     <Trophy size={14} className="text-amber-500" />

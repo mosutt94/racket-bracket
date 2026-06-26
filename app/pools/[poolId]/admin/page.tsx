@@ -508,6 +508,15 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
             </Link>
           </section>
           <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-black">Player labels (Q / WC)</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              ESPN doesn&apos;t supply qualifier/wild-card labels. Add them by hand — they show in the bracket where the seed number goes.
+            </p>
+            <Link href={`/pools/${activePool.id}/admin/labels`} className="mt-4 inline-flex rounded-lg bg-ink px-4 py-2 font-bold text-white">
+              Edit Q / WC labels
+            </Link>
+          </section>
+          <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-black">Submission tracker</h2>
             <p className="mt-1 text-sm text-slate-600">Removing a member deletes their bracket and takes them off the roster.</p>
             <div className="mt-4 space-y-2">

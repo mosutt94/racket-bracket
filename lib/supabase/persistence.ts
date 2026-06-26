@@ -135,7 +135,8 @@ function mapPlayer(row: any) {
     externalProviderId: row.external_provider_id,
     name: row.name,
     country: row.country,
-    seed: row.seed
+    seed: row.seed,
+    designation: row.designation ?? null
   };
 }
 
@@ -1925,6 +1926,15 @@ export async function refreshDrawSeedsInSupabase(input: { tournamentId: string; 
   const results = await Promise.all(updates);
   for (const result of results) throwIfError(result.error);
   return { seedsUpdated };
+}
+
+const ALLOWED_DESIGNATIONS = new Set(["Q", "WC", "LL", "PR"]);
+
+/** Set or clear a player's manual bracket label (Q/WC/LL/PR). Cosmetic — never
+ *  affects matches, picks, or scoring. */
+export async function setPlayerDesignationInSupabase(input: { playerId: string; designation: string | null }): Promise<void> {
+  const designation = input.designation && ALLOWED_DESIGNATIONS.has(input.designation) ? input.designation : null;
+  throwIfError((await getClient().from("players").update({ designation }).eq("id", input.playerId)).error);
 }
 
 export async function importEspnDrawInSupabase(input: { tournamentId: string; draw: EspnDrawImportData; resetExistingPicks?: boolean }) {

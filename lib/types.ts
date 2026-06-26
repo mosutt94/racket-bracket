@@ -70,6 +70,9 @@ export interface Player {
   name: string;
   country?: string | null;
   seed?: number | null;
+  // Manual label for unseeded players (Q, WC, LL…). Shown where the seed would
+  // go when there's no seed. ESPN doesn't supply these — commissioners set them.
+  designation?: string | null;
 }
 
 export interface Match {
