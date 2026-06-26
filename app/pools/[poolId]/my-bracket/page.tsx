@@ -9,7 +9,7 @@ import { PoolNav } from "@/components/PoolNav";
 import { getCachedAppState, getCurrentUserForState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
 import { pickWinner } from "@/lib/services/bracket-service";
 import { getSlamShortLabel } from "@/lib/services/bracket-shell-service";
-import { findTournamentForPool } from "@/lib/state-helpers";
+import { findTournamentForPool, isPickingClosed } from "@/lib/state-helpers";
 import { useAutoSync } from "@/lib/use-auto-sync";
 import type { AppState, Bracket, BracketLiveScore } from "@/lib/types";
 import { createUuid } from "@/lib/uuid";
@@ -155,7 +155,7 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
   // userLocked = the player froze it (their padlock). pickingClosed = the
   // commissioner/tournament closed picking (can't be reopened by the player).
   const userLocked = activeBracket.status !== "draft";
-  const pickingClosed = tournament.status !== "picking_open";
+  const pickingClosed = isPickingClosed(tournament);
   const locked = userLocked || pickingClosed;
   const pickedCount = matches.filter((match) => state.bracketPicks.some((pick) => pick.bracketId === activeBracket.id && pick.matchId === match.id)).length;
   const sortedMatches = [...matches].sort((a, b) => a.roundNumber - b.roundNumber || a.matchNumber - b.matchNumber);

@@ -109,6 +109,14 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   const needsReauth = isCommissioner && hasPassword && sessionUserId !== undefined && sessionUserId !== me.id;
   const isPickingOpen = activeTournament.status === "picking_open";
   const isLocked = activeTournament.status === "locked";
+  // Scheduled auto-lock: while picking is open, picks freeze automatically once
+  // the picking deadline passes (so play can't start with brackets still open).
+  const autoLockAt = isPickingOpen && activeTournament.pickingDeadline ? new Date(activeTournament.pickingDeadline) : null;
+  const autoLockValid = autoLockAt !== null && !Number.isNaN(autoLockAt.getTime());
+  const autoLockLabel = autoLockValid
+    ? autoLockAt!.toLocaleString("en-US", { timeZone: "America/New_York", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+    : null;
+  const autoLockPassed = autoLockValid && Date.now() >= autoLockAt!.getTime();
   const members = state.poolMembers.filter((member) => member.poolId === activePool.id);
   // Drive the submission tracker off the brackets that actually exist for this
   // pool, not the member list. The two can drift apart (email-based identity can
@@ -570,6 +578,13 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
               <span>Picking status:</span>
               <StatusBadge status={activeTournament.status} />
             </div>
+            {autoLockLabel ? (
+              <p className="mt-2 text-xs font-semibold text-slate-500">
+                {autoLockPassed
+                  ? `Picks auto-locked ${autoLockLabel} ET (tournament start). Lock picking to make it permanent.`
+                  : `Auto-locks ${autoLockLabel} ET — you don't have to lock manually.`}
+              </p>
+            ) : null}
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <button
                 onClick={() => setTournamentStatus("locked")}
