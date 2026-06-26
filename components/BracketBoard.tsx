@@ -165,24 +165,28 @@ export function BracketBoard({
     return labels[roundNumber] ?? `R${roundNumber}`;
   };
 
-  // While a chip tap / Next-Pick is programmatically scrolling the board, the
-  // onScroll handler must NOT re-derive the focused round from the mid-flight
-  // scroll position. A quick tap (e.g. Finals then back to round 2) reverses an
-  // in-flight smooth scroll; at the reversal point the scroll momentarily stalls,
-  // which would fire onScroll, snap focus to whatever round is under the cursor
-  // right then (a later, empty round), reflow the board and derail the scroll so
-  // it settles on the wrong round — showing that round's empty cards as TBD even
-  // though the picks are intact. We ignore scroll-driven focus until the
-  // programmatic scroll has had time to finish.
+  // Tracks how long the board is busy with a programmatic (chip-tap) scroll.
+  // Two jobs:
+  //  1) Desktop + mobile: if a second chip tap lands while the first tap's
+  //     smooth scroll is still animating, the two scrolls race — browsers don't
+  //     reliably retarget an in-flight smooth scroll, so the board parks BETWEEN
+  //     rounds, leaving an empty later round in view that renders as TBD even
+  //     though the picks are intact (tapping another round re-fixes it). For a
+  //     rapid second tap we scroll INSTANTLY, which aborts the in-flight scroll
+  //     and lands exactly on the tapped round.
+  //  2) Mobile only: the onScroll handler derives the focused round from the
+  //     scroll position; during a programmatic scroll it must not fight the tap.
   const programmaticScrollUntil = useRef(0);
   const focusRound = (roundNumber: number, behavior: ScrollBehavior = "smooth") => {
     setFocusedRoundNumber(roundNumber);
-    programmaticScrollUntil.current = Date.now() + 700;
+    const now = Date.now();
+    const racingPreviousScroll = now < programmaticScrollUntil.current;
+    programmaticScrollUntil.current = now + 700;
     // The bracket has its own horizontal scroll container now (.bracket-scroll),
     // so we scroll INSIDE that ref instead of moving the window.
     scrollRef.current?.scrollTo({
       left: getRoundScrollX(roundNumber),
-      behavior
+      behavior: racingPreviousScroll ? "auto" : behavior
     });
   };
 
