@@ -116,6 +116,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   // bracket regardless of whether it maps cleanly to a member row.
   const poolBrackets = state.brackets.filter((item) => item.poolId === activePool.id && item.tournamentId === activeTournament.id);
   const profileName = (userId: string) => state.profiles.find((profile) => profile.id === userId)?.displayName ?? "Unknown player";
+  const profileEmail = (userId: string) => state.profiles.find((profile) => profile.id === userId)?.email ?? null;
   // A bracket is complete once every match in the draw has a pick filled in.
   const totalMatches = state.matches.filter((match) => match.tournamentId === activeTournament.id).length;
   const filledByBracket = new Map<string, number>();
@@ -622,6 +623,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
               {roster.length === 0 ? <p className="text-sm text-slate-500">No members yet.</p> : null}
               {roster.map(({ userId, bracket, role, isMainCommissioner }) => {
                 const name = profileName(userId);
+                const email = profileEmail(userId);
                 const isCo = role === "commissioner" && !isMainCommissioner;
                 // You can't promote/demote or remove yourself, or touch the main commissioner.
                 const canManage = !isMainCommissioner && userId !== me.id;
@@ -630,6 +632,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
                   <div key={userId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
                     <span className="min-w-0">
                       <span className="block truncate font-semibold">{name}</span>
+                      {email ? <span className="block truncate text-xs text-slate-500">{email}</span> : null}
                       {isMainCommissioner ? (
                         <span className="text-xs font-black uppercase tracking-wide text-court-700">Commissioner</span>
                       ) : isCo ? (
