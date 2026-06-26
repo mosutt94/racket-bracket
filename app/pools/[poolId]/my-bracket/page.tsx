@@ -31,6 +31,25 @@ function deriveCachedInitial(poolId: string): { state: AppState | null; bracket:
   return { state: cached, bracket: serverBracket };
 }
 
+// Apply a freshly-loaded server state without clobbering the picks the user is
+// actively making. Background reloads (auto-sync, initial load) refresh match
+// results + everyone's scores, but this page is the sole writer of the user's
+// own bracket picks — so once the user has started editing (`userHasEdited`),
+// we keep their on-screen picks and only take the rest of the fresh state.
+function mergePreservingPicks(
+  prev: AppState | null,
+  fresh: AppState,
+  myBracketId: string | null,
+  userHasEdited: boolean
+): AppState {
+  if (!prev || !myBracketId || !userHasEdited) return fresh;
+  const myPicks = prev.bracketPicks.filter((pick) => pick.bracketId === myBracketId);
+  return {
+    ...fresh,
+    bracketPicks: [...fresh.bracketPicks.filter((pick) => pick.bracketId !== myBracketId), ...myPicks]
+  };
+}
+
 export default function MyBracketPage({ params }: { params: { poolId: string } }) {
   const [state, setState] = useState<AppState | null>(() => deriveCachedInitial(params.poolId).state);
   const [bracket, setBracket] = useState<Bracket | null>(() => deriveCachedInitial(params.poolId).bracket);
@@ -40,6 +59,11 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
   const [liveScores, setLiveScores] = useState<Record<string, BracketLiveScore>>({});
   const changeVersion = useRef(0);
   const saveRequestId = useRef(0);
+  // Id of the bracket this user is editing. Read inside background reloads
+  // (auto-sync) to carry the user's own picks across a server refresh —
+  // this page is the sole writer of those picks, so the server can never
+  // hold a newer version of them than what's on screen.
+  const activeBracketIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     loadAppState(params.poolId).then((loaded) => {
@@ -57,8 +81,11 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
         totalScore: 0,
         status: "draft" as const
       };
-      const nextState = serverBracket ? loaded : { ...loaded, brackets: [...loaded.brackets, nextBracket] };
-      setState(nextState);
+      const withBracket = serverBracket ? loaded : { ...loaded, brackets: [...loaded.brackets, nextBracket] };
+      // If the user already started picking while this initial load was in
+      // flight, don't wipe those picks — carry them over.
+      activeBracketIdRef.current = nextBracket.id;
+      setState((prev) => mergePreservingPicks(prev, withBracket, nextBracket.id, changeVersion.current > 0));
       setBracket(nextBracket);
     });
   }, [params.poolId]);
@@ -67,12 +94,13 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
   useAutoSync(tournament, {
     onSynced: async () => {
       const fresh = await loadAppState(params.poolId);
-      setState(fresh);
+      setState((prev) => mergePreservingPicks(prev, fresh, activeBracketIdRef.current, changeVersion.current > 0));
     }
   });
   const matches = useMemo(() => state && tournament ? state.matches.filter((match) => match.tournamentId === tournament.id) : [], [state, tournament]);
   const rounds = useMemo(() => state && tournament ? state.rounds.filter((round) => round.tournamentId === tournament.id) : [], [state, tournament]);
   const activeBracket = state && bracket ? state.brackets.find((item) => item.id === bracket.id) ?? bracket : null;
+  activeBracketIdRef.current = activeBracket?.id ?? activeBracketIdRef.current;
 
   useEffect(() => {
     if (!tournament) return;
