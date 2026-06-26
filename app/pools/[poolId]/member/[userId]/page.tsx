@@ -49,6 +49,7 @@ export default function MemberBracketPage({ params }: { params: { poolId: string
         ) : (
           <BracketBoard
             bracketId={memberBracket.id}
+            slamType={tournament.slamType}
             mode="review"
             locked
             title={`${name} · ${getSlamShortLabel(tournament.slamType, tournament.year, tournament.gender)}`}

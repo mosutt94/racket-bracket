@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { Check, CircleDot, Trophy, X } from "lucide-react";
 import { getProjectedMatchPlayers } from "@/lib/services/bracket-service";
 import { countryCodeToFlagEmoji } from "@/lib/country-flags";
-import type { BracketLiveScore, BracketPick, Match, Player, ProviderMatchStatus, TournamentRound } from "@/lib/types";
+import type { BracketLiveScore, BracketPick, Match, Player, ProviderMatchStatus, SlamType, TournamentRound } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "./StatusBadge";
 
 interface BracketBoardProps {
   bracketId?: string;
+  slamType?: SlamType;
   matches: Match[];
   players: Player[];
   rounds: TournamentRound[];
@@ -94,6 +95,7 @@ function getVerticalScrollParent(node: HTMLElement | null): HTMLElement | null {
 
 export function BracketBoard({
   bracketId = "",
+  slamType,
   matches,
   players,
   rounds,
@@ -153,15 +155,11 @@ export function BracketBoard({
   const [focusedRoundNumber, setFocusedRoundNumber] = useState(sortedRounds[0]?.roundNumber ?? 1);
 
   const getRoundLabel = (roundNumber: number) => {
-    const labels: Record<number, string> = {
-      1: "1T",
-      2: "2T",
-      3: "3T",
-      4: "1/8",
-      5: "1/4",
-      6: "1/2",
-      7: "F"
-    };
+    // Roland Garros uses the French convention (tours + fractions); every other
+    // Slam uses the English round/QF/SF/F shorthand.
+    const frenchLabels: Record<number, string> = { 1: "1T", 2: "2T", 3: "3T", 4: "1/8", 5: "1/4", 6: "1/2", 7: "F" };
+    const standardLabels: Record<number, string> = { 1: "R1", 2: "R2", 3: "R3", 4: "R4", 5: "QF", 6: "SF", 7: "F" };
+    const labels = slamType === "french_open" ? frenchLabels : standardLabels;
     return labels[roundNumber] ?? `R${roundNumber}`;
   };
 

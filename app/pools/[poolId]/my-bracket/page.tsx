@@ -249,6 +249,7 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain">
           <BracketBoard
             bracketId={activeBracket.id}
+            slamType={tournament.slamType}
             mode={locked ? "review" : "picking"}
             locked={locked}
             title={getSlamShortLabel(tournament.slamType, tournament.year, tournament.gender)}

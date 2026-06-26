@@ -31,7 +31,7 @@ export default function TournamentBracketPage({ params }: { params: { poolId: st
           <p className="text-xs font-bold uppercase tracking-wide text-court-700">Official draw</p>
           <h1 className="truncate text-lg font-black text-ink sm:text-xl">{tournament.name}</h1>
         </div>
-        <BracketBoard mode="real" matches={matches} players={state.players} rounds={rounds} />
+        <BracketBoard mode="real" slamType={tournament.slamType} matches={matches} players={state.players} rounds={rounds} />
       </main>
     </AppFrame>
   );
