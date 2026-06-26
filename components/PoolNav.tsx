@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
+import { loadDashboardState } from "@/lib/app-state-client";
 import { clearCurrentUser, getSavedCurrentUser } from "@/lib/current-user";
 import { cn } from "@/lib/utils";
 
@@ -20,9 +21,17 @@ export function PoolNav({
 }) {
   const pathname = usePathname();
   const [displayName, setDisplayName] = useState<string | null>(null);
+  // Number of brackets the signed-in user belongs to. The "Brackets" overview
+  // link is pointless when you're only in one, so we hide it in that case.
+  const [poolCount, setPoolCount] = useState<number | null>(null);
 
   useEffect(() => {
-    if (showAccount) setDisplayName(getSavedCurrentUser()?.displayName ?? null);
+    const saved = getSavedCurrentUser();
+    if (showAccount) setDisplayName(saved?.displayName ?? null);
+    if (!saved) return;
+    loadDashboardState(saved.id)
+      .then((state) => setPoolCount(state.poolMembers.filter((member) => member.userId === saved.id).length))
+      .catch(() => {});
   }, [showAccount]);
 
   async function signOut() {
@@ -36,10 +45,12 @@ export function PoolNav({
   }
 
   // The home-icon "Brackets" pill returns to the cross-bracket overview
-  // (/dashboard) — a home icon reads as "go to the overview" instead of a back
-  // arrow that implied browser-back. Admin is commissioner-only.
+  // (/dashboard). Only show it once we know the user is in more than one
+  // bracket — for a single-bracket user the overview is just that one bracket,
+  // so the link is clutter. Hidden until the count is known to avoid a flash.
+  const showBrackets = poolCount !== null && poolCount > 1;
   const links: Array<{ label: string; href: string; icon?: ReactNode }> = [
-    { label: "Brackets", href: "/dashboard", icon: <Home size={14} /> },
+    ...(showBrackets ? [{ label: "Brackets", href: "/dashboard", icon: <Home size={14} /> }] : []),
     { label: "Tournament", href: `/pools/${poolId}/bracket` },
     { label: "My Bracket", href: `/pools/${poolId}/my-bracket` },
     { label: "Leaderboard", href: `/pools/${poolId}/leaderboard` },
