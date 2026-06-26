@@ -629,7 +629,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
                 const canManage = !isMainCommissioner && userId !== me.id;
                 const complete = bracket ? isBracketComplete(bracket.id) : false;
                 return (
-                  <div key={userId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                  <div key={userId} className="flex flex-col gap-2 rounded-lg bg-slate-50 px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                     <span className="min-w-0">
                       <span className="block truncate font-semibold">{name}</span>
                       {email ? <span className="block truncate text-xs text-slate-500">{email}</span> : null}
