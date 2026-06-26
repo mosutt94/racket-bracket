@@ -89,7 +89,7 @@ export default function LeaderboardPage({ params }: { params: { poolId: string }
                 <span className="min-w-0">
                   <span className="block truncate font-bold">{row.displayName}</span>
                   <span className="block truncate text-xs text-slate-500">
-                    {row.complete ? "Complete" : "Incomplete"}{row.locked ? " · Locked" : ""}
+                    {!row.started ? "Not started" : row.complete ? "Complete" : "Incomplete"}{row.locked ? " · Locked" : ""}
                   </span>
                 </span>
                 <span className="text-right">

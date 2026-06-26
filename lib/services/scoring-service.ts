@@ -124,6 +124,10 @@ export function getLeaderboard(state: AppState, poolId: string, tournamentId: st
         correctPicks,
         // Complete = every match in the draw has a pick filled in.
         complete: tournamentMatches.length > 0 && filledPicks >= tournamentMatches.length,
+        // Started = the player has a bracket of record (created on their first
+        // pick). Mirrors the admin tracker so both pages agree on "Not started"
+        // vs "Incomplete".
+        started: Boolean(bracket),
         // Locked = the player froze their bracket (old "submitted" counts as locked).
         locked: bracket?.status === "locked" || bracket?.status === "submitted",
         bracketStatus: bracket?.status ?? "draft"
