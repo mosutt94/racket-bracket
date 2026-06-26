@@ -165,8 +165,19 @@ export function BracketBoard({
     return labels[roundNumber] ?? `R${roundNumber}`;
   };
 
+  // While a chip tap / Next-Pick is programmatically scrolling the board, the
+  // onScroll handler must NOT re-derive the focused round from the mid-flight
+  // scroll position. A quick tap (e.g. Finals then back to round 2) reverses an
+  // in-flight smooth scroll; at the reversal point the scroll momentarily stalls,
+  // which would fire onScroll, snap focus to whatever round is under the cursor
+  // right then (a later, empty round), reflow the board and derail the scroll so
+  // it settles on the wrong round — showing that round's empty cards as TBD even
+  // though the picks are intact. We ignore scroll-driven focus until the
+  // programmatic scroll has had time to finish.
+  const programmaticScrollUntil = useRef(0);
   const focusRound = (roundNumber: number, behavior: ScrollBehavior = "smooth") => {
     setFocusedRoundNumber(roundNumber);
+    programmaticScrollUntil.current = Date.now() + 700;
     // The bracket has its own horizontal scroll container now (.bracket-scroll),
     // so we scroll INSIDE that ref instead of moving the window.
     scrollRef.current?.scrollTo({
@@ -191,6 +202,9 @@ export function BracketBoard({
       // yanks the view vertically, which feels erratic on a trackpad. There the
       // focused round changes only via the round selector.
       if (!window.matchMedia("(max-width: 1023px)").matches) return;
+      // A chip tap is driving the scroll — it already chose the round; don't let
+      // a mid-flight reading override it (that's what caused the TBD flash).
+      if (Date.now() < programmaticScrollUntil.current) return;
       const span = cardWidth + columnGap;
       const index = Math.round((el.scrollLeft + 12) / span);
       const target = sortedRounds[Math.min(Math.max(index, 0), sortedRounds.length - 1)];
