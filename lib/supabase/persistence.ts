@@ -1867,6 +1867,66 @@ export async function recordLiveScoreSnapshot(input: {
   return data?.id as string | undefined;
 }
 
+/** True if any bracket in this tournament has at least one pick. */
+export async function tournamentHasPicksInSupabase(tournamentId: string): Promise<boolean> {
+  const supabase = getClient();
+  const { data: brackets, error } = await supabase.from("brackets").select("id").eq("tournament_id", tournamentId);
+  throwIfError(error);
+  const ids = (brackets ?? []).map((row: any) => row.id);
+  if (ids.length === 0) return false;
+  const { count, error: countError } = await supabase
+    .from("bracket_picks")
+    .select("id", { count: "exact", head: true })
+    .in("bracket_id", ids);
+  throwIfError(countError);
+  return (count ?? 0) > 0;
+}
+
+/**
+ * Non-destructive: refresh ONLY the player seeds from ESPN, matched by draw-slot
+ * position. ESPN often attaches the 32 seeds shortly AFTER it publishes the draw
+ * names, so a draw imported early shows almost no seeds. This lets the seeds be
+ * pulled in later without re-importing — it never touches the player↔slot
+ * assignments, matches, brackets, or picks, so it's safe to run after people pick.
+ */
+export async function refreshDrawSeedsInSupabase(input: { tournamentId: string; draw: EspnDrawImportData }): Promise<{ seedsUpdated: number }> {
+  const supabase = getClient();
+  const { data: tournament, error: tournamentError } = await supabase
+    .from("tournaments")
+    .select("tournament_instance_id")
+    .eq("id", input.tournamentId)
+    .maybeSingle();
+  throwIfError(tournamentError);
+  if (!tournament?.tournament_instance_id) throw new Error("Tournament not found.");
+
+  const { data: slots, error: slotsError } = await supabase
+    .from("draw_slots")
+    .select("id, position, player_id")
+    .eq("tournament_instance_id", tournament.tournament_instance_id);
+  throwIfError(slotsError);
+  const slotByPosition = new Map<number, { id: string; playerId: string }>(
+    (slots ?? []).map((row: any) => [row.position, { id: row.id, playerId: row.player_id }])
+  );
+
+  const now = new Date().toISOString();
+  const updates: any[] = [];
+  let seedsUpdated = 0;
+  for (const matchup of input.draw.matchups) {
+    for (const slot of [matchup.player1, matchup.player2]) {
+      const drawSlot = slotByPosition.get(slot.position);
+      if (!drawSlot?.playerId) continue;
+      const seed = slot.seed ?? null;
+      // Seed only — deliberately not name/country/assignments, so picks stay valid.
+      updates.push(supabase.from("players").update({ seed }).eq("id", drawSlot.playerId));
+      updates.push(supabase.from("draw_slots").update({ seed, updated_at: now }).eq("id", drawSlot.id));
+      if (seed !== null) seedsUpdated += 1;
+    }
+  }
+  const results = await Promise.all(updates);
+  for (const result of results) throwIfError(result.error);
+  return { seedsUpdated };
+}
+
 export async function importEspnDrawInSupabase(input: { tournamentId: string; draw: EspnDrawImportData; resetExistingPicks?: boolean }) {
   const supabase = getClient();
 

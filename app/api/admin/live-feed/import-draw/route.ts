@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { EspnTennisProvider } from "@/lib/providers/espn-tennis-provider";
 import { buildEspnMappingPreview } from "@/lib/services/espn-mapping-service";
-import { getAppStateFromSupabase, importEspnDrawInSupabase, isSupabaseConfigured } from "@/lib/supabase/persistence";
+import {
+  getAppStateFromSupabase,
+  importEspnDrawInSupabase,
+  isSupabaseConfigured,
+  refreshDrawSeedsInSupabase,
+  tournamentHasPicksInSupabase
+} from "@/lib/supabase/persistence";
 import { requireCommissionerForTournament } from "@/lib/auth/guard";
 import type { Gender, SlamType } from "@/lib/types";
 
@@ -31,6 +37,15 @@ export async function POST(request: Request) {
   try {
     const provider = new EspnTennisProvider();
     const draw = await provider.getDrawImportData({ slamType, year, gender });
+
+    // If picks already exist and we're not deliberately replacing the draw,
+    // don't wipe them — just pull in the latest seeds (ESPN attaches the 32
+    // seeds shortly after publishing the names). Non-destructive.
+    if (!resetExistingPicks && (await tournamentHasPicksInSupabase(tournamentId))) {
+      const seedResult = await refreshDrawSeedsInSupabase({ tournamentId, draw });
+      return NextResponse.json({ ok: true, mode: "seeds", seedsUpdated: seedResult.seedsUpdated });
+    }
+
     const result = await importEspnDrawInSupabase({ tournamentId, draw, resetExistingPicks });
     let mapping = null;
     let mappingWarning = null;
@@ -45,6 +60,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
+      mode: resetExistingPicks ? "replaced" : "imported",
       result,
       mapping,
       warning: mappingWarning

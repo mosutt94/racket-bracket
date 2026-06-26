@@ -37,7 +37,6 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [importBusy, setImportBusy] = useState(false);
   const [importStatus, setImportStatus] = useState<{ ok: boolean; text: string } | null>(null);
-  const [importNeedsReset, setImportNeedsReset] = useState(false);
   const [statusBusy, setStatusBusy] = useState<TournamentStatus | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [scoringRounds, setScoringRounds] = useState<TournamentRound[]>([]);
@@ -137,7 +136,6 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   async function importDraw(resetExistingPicks = false) {
     setImportBusy(true);
     setImportStatus(null);
-    if (!resetExistingPicks) setImportNeedsReset(false);
     try {
       const response = await fetch("/api/admin/live-feed/import-draw", {
         method: "POST",
@@ -151,26 +149,18 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
         })
       });
       const result = await response.json();
-      if (!response.ok || !result.ok) {
-        // Provisional pre-draw picks block a plain import — offer the reset path.
-        if (!resetExistingPicks && /picks exist/i.test(result.error ?? "")) {
-          setImportNeedsReset(true);
-          setImportStatus({
-            ok: false,
-            text: "Brackets already have picks for this tournament. Importing the published draw will clear them so everyone re-picks against the real bracket."
-          });
-          return;
-        }
-        throw new Error(result.error ?? "Could not import the draw.");
-      }
-      setImportNeedsReset(false);
+      if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not import the draw.");
       setState(await loadAppState(params.poolId));
-      setImportStatus({
-        ok: true,
-        text: result.warning
-          ? `Imported, but: ${result.warning}`
-          : "Draw imported from ESPN. If you still see TBD, ESPN hasn't published the bracket yet — try again later."
-      });
+      let text: string;
+      if (result.mode === "seeds") {
+        // Picks already exist, so we only refreshed seeds — nobody's picks touched.
+        text = `Pulled in the latest seeds — picks were left untouched (${result.seedsUpdated} seeds set).`;
+      } else if (result.warning) {
+        text = `Imported, but: ${result.warning}`;
+      } else {
+        text = "Draw imported from ESPN. If you still see TBD, ESPN hasn't published the bracket yet — try again later.";
+      }
+      setImportStatus({ ok: true, text });
     } catch (error) {
       setImportStatus({ ok: false, text: error instanceof Error ? error.message : "Could not import the draw." });
     } finally {
@@ -179,7 +169,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   }
 
   function confirmResetImport() {
-    if (window.confirm("This clears ALL picks for this tournament so everyone re-picks against the newly published draw. This can't be undone. Continue?")) {
+    if (window.confirm("This wipes the whole draw AND clears ALL picks for this tournament so everyone re-picks. Only needed if the bracket itself was wrong. This can't be undone. Continue?")) {
       importDraw(true);
     }
   }
@@ -450,20 +440,22 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
                   <Download size={18} />
                   <p className="text-xs font-black uppercase tracking-wide">Import draw</p>
                 </div>
-                <h2 className="mt-2 text-xl font-black text-ink">First-round matchups</h2>
+                <h2 className="mt-2 text-xl font-black text-ink">First-round matchups & seeds</h2>
                 <p className="mt-1 text-sm text-slate-600">
-                  When ESPN publishes the {activeTournament.name} bracket, pull the first-round matchups to replace the TBDs. Safe to run anytime before picks are made.
+                  Pull the first-round matchups and the player seeds from ESPN. Safe to run anytime — once people have picked, this only refreshes the seeds (ESPN adds them shortly after the draw) and never touches anyone&apos;s picks.
                 </p>
               </div>
               <div className="grid gap-2 md:min-w-[220px]">
                 <button onClick={() => importDraw(false)} disabled={importBusy} className="rounded-lg bg-ink px-4 py-3 font-bold text-white disabled:bg-slate-300">
-                  {importBusy ? "Importing..." : "Import draw from ESPN"}
+                  {importBusy ? "Importing..." : "Import draw / refresh seeds"}
                 </button>
-                {importNeedsReset ? (
-                  <button onClick={confirmResetImport} disabled={importBusy} className="rounded-lg bg-clay-700 px-4 py-3 font-bold text-white disabled:bg-slate-300">
-                    {importBusy ? "Replacing…" : "Replace draw & clear all picks"}
-                  </button>
-                ) : null}
+                <button
+                  onClick={confirmResetImport}
+                  disabled={importBusy}
+                  className="rounded-lg border border-clay-300 px-4 py-2 text-sm font-bold text-clay-700 transition hover:bg-clay-100 disabled:opacity-50"
+                >
+                  Re-import &amp; clear all picks
+                </button>
               </div>
               {importStatus ? (
                 <p className={importStatus.ok ? "mt-3 text-sm font-bold text-court-700" : "mt-3 text-sm font-bold text-clay-700"}>
