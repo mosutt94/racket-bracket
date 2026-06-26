@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, Download, KeyRound, Lock, Settings, ShieldAlert, ShieldCheck, Trash2, Users } from "lucide-react";
+import { CalendarClock, Download, Eraser, KeyRound, Lock, Settings, ShieldAlert, ShieldCheck, Trash2, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { PageLoading } from "@/components/PageLoading";
@@ -45,6 +45,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [deleteMessage, setDeleteMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [roleBusyUserId, setRoleBusyUserId] = useState<string | null>(null);
+  const [clearingUserId, setClearingUserId] = useState<string | null>(null);
   // First-time password set (for commissioners migrating from no password).
   const [setPw, setSetPw] = useState("");
   const [setPwConfirm, setSetPwConfirm] = useState("");
@@ -110,7 +111,14 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   // bracket regardless of whether it maps cleanly to a member row.
   const poolBrackets = state.brackets.filter((item) => item.poolId === activePool.id && item.tournamentId === activeTournament.id);
   const profileName = (userId: string) => state.profiles.find((profile) => profile.id === userId)?.displayName ?? "Unknown player";
-  const submitted = poolBrackets.filter((bracket) => bracket.status !== "draft");
+  // A bracket is complete once every match in the draw has a pick filled in.
+  const totalMatches = state.matches.filter((match) => match.tournamentId === activeTournament.id).length;
+  const filledByBracket = new Map<string, number>();
+  for (const pick of state.bracketPicks) {
+    if (pick.pickedWinnerPlayerId) filledByBracket.set(pick.bracketId, (filledByBracket.get(pick.bracketId) ?? 0) + 1);
+  }
+  const isBracketComplete = (bracketId: string) => totalMatches > 0 && (filledByBracket.get(bracketId) ?? 0) >= totalMatches;
+  const completeCount = poolBrackets.filter((bracket) => isBracketComplete(bracket.id)).length;
   // Unified roster: every member, plus any bracket owner not in the member list
   // (email-identity drift), so every real participant is manageable.
   const bracketByUser = new Map(poolBrackets.map((bracket) => [bracket.userId, bracket]));
@@ -247,6 +255,27 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
       setDeleteMessage({ ok: false, text: error instanceof Error ? error.message : "Could not remove member." });
     } finally {
       setDeletingUserId(null);
+    }
+  }
+
+  async function clearBracket(userId: string, displayName: string) {
+    if (!window.confirm(`Clear ${displayName}'s bracket? This wipes all their picks but keeps them in the bracket so they can re-fill.`)) return;
+    setClearingUserId(userId);
+    setDeleteMessage(null);
+    try {
+      const response = await fetch("/api/admin/clear-bracket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ poolId: activePool.id, userId })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not clear bracket.");
+      setState(await loadAppState(params.poolId));
+      setDeleteMessage({ ok: true, text: `Cleared ${displayName}'s picks.` });
+    } catch (error) {
+      setDeleteMessage({ ok: false, text: error instanceof Error ? error.message : "Could not clear bracket." });
+    } finally {
+      setClearingUserId(null);
     }
   }
 
@@ -433,7 +462,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
         </div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Metric icon={<Users />} label="Members" value={members.length} />
-          <Metric icon={<Lock />} label="Submitted" value={`${submitted.length}/${members.length}`} />
+          <Metric icon={<Lock />} label="Complete" value={`${completeCount}/${members.length}`} />
           <Metric icon={<CalendarClock />} label="Draw status" value={activeInstance?.status.replace("_", " ") ?? activeTournament.status} small />
           <Metric icon={<Settings />} label="Last sync" value={formatDateTime(activeTournament.lastSyncedAt ?? activeInstance?.lastSyncedAt)} small />
         </div>
@@ -562,6 +591,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
                 const isCo = role === "commissioner" && !isMainCommissioner;
                 // You can't promote/demote or remove yourself, or touch the main commissioner.
                 const canManage = !isMainCommissioner && userId !== me.id;
+                const complete = bracket ? isBracketComplete(bracket.id) : false;
                 return (
                   <div key={userId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
                     <span className="min-w-0">
@@ -570,11 +600,20 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
                         <span className="text-xs font-black uppercase tracking-wide text-court-700">Commissioner</span>
                       ) : isCo ? (
                         <span className="text-xs font-black uppercase tracking-wide text-court-700">Co-commissioner</span>
-                      ) : (
-                        <span className="text-xs font-semibold text-slate-400">{bracket ? bracket.status : "not started"}</span>
-                      )}
+                      ) : null}
                     </span>
                     <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                      <span
+                        className={
+                          !bracket
+                            ? "rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-400"
+                            : complete
+                              ? "rounded-full bg-court-100 px-2.5 py-1 text-xs font-black text-court-700"
+                              : "rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800"
+                        }
+                      >
+                        {!bracket ? "Not started" : complete ? "Complete" : "Incomplete"}
+                      </span>
                       {canManage ? (
                         <button
                           type="button"
@@ -583,6 +622,16 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
                           className="inline-flex items-center gap-1 rounded-lg border border-court-200 bg-white px-2.5 py-1.5 text-xs font-bold text-court-800 transition hover:bg-court-50 disabled:opacity-50"
                         >
                           <ShieldCheck size={14} /> {roleBusyUserId === userId ? "Saving…" : isCo ? "Remove co-commish" : "Make co-commish"}
+                        </button>
+                      ) : null}
+                      {bracket ? (
+                        <button
+                          type="button"
+                          onClick={() => clearBracket(userId, name)}
+                          disabled={clearingUserId === userId}
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 transition hover:bg-slate-100 disabled:opacity-50"
+                        >
+                          <Eraser size={14} /> {clearingUserId === userId ? "Clearing…" : "Clear"}
                         </button>
                       ) : null}
                       {canManage ? (

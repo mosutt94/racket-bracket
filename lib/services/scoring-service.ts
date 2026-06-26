@@ -97,8 +97,11 @@ export function getLeaderboard(state: AppState, poolId: string, tournamentId: st
       // Count of picks that have come true so far — independent of point value,
       // so a volume leader can differ from the points leader.
       let correctPicks = 0;
+      // Total picks filled in (any winner chosen) — drives complete/incomplete.
+      let filledPicks = 0;
       for (const pick of bracket ? picksByBracket.get(bracket.id) ?? [] : []) {
         if (!pick.pickedWinnerPlayerId) continue;
+        filledPicks += 1;
         const match = matchById.get(pick.matchId);
         if (!match) continue;
         const pts = roundPoints.get(match.roundNumber) ?? 0;
@@ -119,6 +122,10 @@ export function getLeaderboard(state: AppState, poolId: string, tournamentId: st
         score,
         potentialScore,
         correctPicks,
+        // Complete = every match in the draw has a pick filled in.
+        complete: tournamentMatches.length > 0 && filledPicks >= tournamentMatches.length,
+        // Locked = the player froze their bracket (old "submitted" counts as locked).
+        locked: bracket?.status === "locked" || bracket?.status === "submitted",
         bracketStatus: bracket?.status ?? "draft"
       };
     })

@@ -1557,6 +1557,31 @@ export async function leaveBracketInSupabase(input: { poolId: string; userId: st
   return removePoolMemberInSupabase(input);
 }
 
+/**
+ * Clear a user's bracket: wipe their picks and reset it to empty/unlocked, but
+ * KEEP the person in the pool (and their bracket row). Unlike remove, they stay
+ * a member and can re-fill. Allowed for any member, including commissioners.
+ */
+export async function clearBracketInSupabase(input: { poolId: string; userId: string }): Promise<{ cleared: number }> {
+  const supabase = getClient();
+  const { data: brackets, error } = await supabase
+    .from("brackets")
+    .select("id, tournament_id")
+    .eq("pool_id", input.poolId)
+    .eq("user_id", input.userId);
+  throwIfError(error);
+  let cleared = 0;
+  for (const bracket of brackets ?? []) {
+    throwIfError((await supabase.from("score_events").delete().eq("tournament_id", bracket.tournament_id).eq("user_id", input.userId)).error);
+    throwIfError((await supabase.from("bracket_picks").delete().eq("bracket_id", bracket.id)).error);
+    throwIfError(
+      (await supabase.from("brackets").update({ status: "draft", submitted_at: null, locked_at: null, total_score: 0 }).eq("id", bracket.id)).error
+    );
+    cleared += 1;
+  }
+  return { cleared };
+}
+
 export async function removePoolMemberInSupabase(input: { poolId: string; userId: string }) {
   const supabase = getClient();
 

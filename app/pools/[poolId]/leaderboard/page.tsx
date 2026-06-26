@@ -88,7 +88,9 @@ export default function LeaderboardPage({ params }: { params: { poolId: string }
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate font-bold">{row.displayName}</span>
-                  <span className="block truncate text-xs text-slate-500">{row.role} · {row.bracketStatus}</span>
+                  <span className="block truncate text-xs text-slate-500">
+                    {row.complete ? "Complete" : "Incomplete"}{row.locked ? " · Locked" : ""}
+                  </span>
                 </span>
                 <span className="text-right">
                   <span className="block text-lg font-black" title="Current score / potential if all remaining picks hit">

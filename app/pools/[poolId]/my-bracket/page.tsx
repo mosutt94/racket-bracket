@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, LocateFixed, Save } from "lucide-react";
+import { CheckCircle2, Lock, LocateFixed, Save, Unlock } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { BracketBoard } from "@/components/BracketBoard";
@@ -124,7 +124,11 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
   }, []);
 
   if (!state || !tournament || !bracket || !activeBracket) return <PageLoading />;
-  const locked = activeBracket.status !== "draft" || tournament.status !== "picking_open";
+  // userLocked = the player froze it (their padlock). pickingClosed = the
+  // commissioner/tournament closed picking (can't be reopened by the player).
+  const userLocked = activeBracket.status !== "draft";
+  const pickingClosed = tournament.status !== "picking_open";
+  const locked = userLocked || pickingClosed;
   const complete = isBracketComplete(activeBracket.id, matches, state.bracketPicks);
   const pickedCount = matches.filter((match) => state.bracketPicks.some((pick) => pick.bracketId === activeBracket.id && pick.matchId === match.id)).length;
   const sortedMatches = [...matches].sort((a, b) => a.roundNumber - b.roundNumber || a.matchNumber - b.matchNumber);
@@ -153,16 +157,17 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
     window.setTimeout(() => setHighlightedMatchId(null), 2200);
   }
 
-  async function persist(status: "draft" | "submitted") {
+  async function persist(status: "draft" | "locked") {
     if (!state || !activeBracket) return;
     const requestId = saveRequestId.current + 1;
     const savedChangeVersion = changeVersion.current;
     saveRequestId.current = requestId;
     setSaveStatus("saving");
+    const now = new Date().toISOString();
     const targetBracket: Bracket =
-      status === "submitted"
-        ? { ...activeBracket, status: "submitted", submittedAt: activeBracket.submittedAt ?? new Date().toISOString() }
-        : activeBracket;
+      status === "locked"
+        ? { ...activeBracket, status: "locked", lockedAt: now, submittedAt: activeBracket.submittedAt ?? now }
+        : { ...activeBracket, status: "draft", lockedAt: null };
     const picks = state.bracketPicks
       .filter((pick) => pick.bracketId === activeBracket.id)
       .map((pick) => ({ matchId: pick.matchId, pickedWinnerPlayerId: pick.pickedWinnerPlayerId }));
@@ -196,7 +201,7 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
       };
       setState(nextState);
       setBracket(targetBracket);
-      setSaveStatus(status === "submitted" ? "submitted" : "saved");
+      setSaveStatus("saved");
       setDirty(false);
     } catch {
       if (requestId !== saveRequestId.current) return;
@@ -204,13 +209,6 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
     }
   }
 
-  async function submit() {
-    if (!state || !activeBracket) return;
-    await persist("submitted");
-  }
-
-  const submitted = activeBracket.status === "submitted" || activeBracket.status === "locked";
-  const submitLabel = submitted ? "Submitted" : "Submit";
   const canSaveDraft = !locked && saveStatus === "error";
   const saveLabel = saveStatus === "saving" || dirty ? "Saving..." : saveStatus === "error" ? "Retry save" : "Saved";
   const SaveButtonIcon = dirty || saveStatus === "saving" || saveStatus === "error" ? Save : CheckCircle2;
@@ -227,7 +225,7 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
             mode={locked ? "review" : "picking"}
             locked={locked}
             title={getSlamShortLabel(tournament.slamType, tournament.year, tournament.gender)}
-            submitted={submitted}
+            submitted={locked}
             matches={matches}
             players={state.players}
             rounds={rounds}
@@ -239,20 +237,30 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
             onPick={choose}
           />
         </div>
-        {!submitted ? (
-          <div className="shrink-0 border-t border-court-200 bg-white px-2 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.12)] sm:px-3">
-            <div className="mx-auto flex max-w-5xl items-center gap-2">
-              {nextMissingMatch ? (
-                <button
-                  type="button"
-                  onClick={jumpToNextMissingPick}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ink px-3 py-3 text-sm font-bold text-white"
-                  aria-label="Jump to next pick"
-                >
-                  <LocateFixed size={16} /> Next Pick
-                </button>
-              ) : null}
-              <div className="ml-auto flex items-center gap-2">
+        <div className="shrink-0 border-t border-court-200 bg-white px-2 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.12)] sm:px-3">
+          <div className="mx-auto flex max-w-5xl items-center gap-2">
+            {!locked && nextMissingMatch ? (
+              <button
+                type="button"
+                onClick={jumpToNextMissingPick}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ink px-3 py-3 text-sm font-bold text-white"
+                aria-label="Jump to next pick"
+              >
+                <LocateFixed size={16} /> Next Pick
+              </button>
+            ) : null}
+            <div className="ml-auto flex items-center gap-2">
+              <span
+                className={
+                  complete
+                    ? "inline-flex shrink-0 items-center gap-1 rounded-full bg-court-100 px-2.5 py-1 text-xs font-black text-court-700"
+                    : "inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-500"
+                }
+                title="A bracket is complete once every pick is filled in"
+              >
+                {complete ? "Complete" : `Incomplete · ${pickedCount}/${matches.length}`}
+              </span>
+              {!locked ? (
                 <button
                   onClick={() => persist("draft")}
                   disabled={!canSaveDraft}
@@ -260,17 +268,29 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
                 >
                   <SaveButtonIcon size={18} /> <span className="max-[359px]:hidden">{saveLabel}</span>
                 </button>
+              ) : null}
+              {pickingClosed ? (
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-100 px-4 py-3 text-sm font-black text-slate-500">
+                  <Lock size={16} /> Picks locked
+                </span>
+              ) : userLocked ? (
                 <button
-                  onClick={submit}
-                  disabled={!complete || locked}
-                  className="shrink-0 rounded-lg bg-court-700 px-4 py-3 text-sm font-black text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
+                  onClick={() => persist("draft")}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-court-300 bg-white px-4 py-3 text-sm font-black text-court-800 shadow-sm transition hover:bg-court-50"
                 >
-                  {submitLabel}
+                  <Unlock size={16} /> Unlock
                 </button>
-              </div>
+              ) : (
+                <button
+                  onClick={() => persist("locked")}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-court-700 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-court-900"
+                >
+                  <Lock size={16} /> Lock
+                </button>
+              )}
             </div>
           </div>
-        ) : null}
+        </div>
       </main>
     </AppFrame>
   );

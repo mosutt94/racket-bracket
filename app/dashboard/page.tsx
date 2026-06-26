@@ -125,8 +125,10 @@ export default function DashboardPage() {
             const tournament = findTournamentForPool(state, pool.id);
             const done = isHistoryPool(pool.id);
             // Players can delete their own bracket only before the tournament
-            // starts (picks still open). Commissioners manage their pool elsewhere.
-            const isCommissioner = pool.commissionerUserId === user.id;
+            // starts (picks still open). Commissioners and co-commissioners
+            // can't delete themselves — they manage things from the admin page.
+            const myRole = memberships.find((member) => member.poolId === pool.id)?.role;
+            const isCommissioner = pool.commissionerUserId === user.id || myRole === "commissioner";
             const beforeStart = tournament?.status === "picking_open" || tournament?.status === "setup";
             const canDelete = !isCommissioner && beforeStart;
             return (
