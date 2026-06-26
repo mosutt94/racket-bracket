@@ -65,9 +65,17 @@ export function getCurrentUserForState(state: AppState): Profile {
   return state.profiles.find((profile) => profile.email === stored.email) ?? stored;
 }
 
-/** Whether the signed-in user is the commissioner of the given pool. */
+/**
+ * Whether the signed-in user has commissioner powers over the pool — either the
+ * original commissioner, or a co-commissioner (a member promoted to the
+ * "commissioner" role). Reads the pool's members from the (pool-scoped) state.
+ */
 export function isPoolCommissioner(state: AppState, poolId: string): boolean {
   const pool = state.pools.find((item) => item.id === poolId);
   if (!pool) return false;
-  return pool.commissionerUserId === getCurrentUserForState(state).id;
+  const meId = getCurrentUserForState(state).id;
+  if (pool.commissionerUserId === meId) return true;
+  return state.poolMembers.some(
+    (member) => member.poolId === poolId && member.userId === meId && member.role === "commissioner"
+  );
 }

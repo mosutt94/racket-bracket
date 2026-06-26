@@ -659,22 +659,35 @@ export async function setProfilePasswordHash(userId: string, passwordHash: strin
   throwIfError((await getClient().from("profiles").update({ password_hash: passwordHash }).eq("id", userId)).error);
 }
 
-/** True if userId is the commissioner of this specific pool. */
+/**
+ * True if userId has commissioner powers over this pool — either the original
+ * commissioner (pools.commissioner_user_id) OR a co-commissioner (a pool_member
+ * promoted to the "commissioner" role). Co-commissioners get full admin powers.
+ */
 export async function isCommissionerOfPool(userId: string, poolId: string): Promise<boolean> {
-  const { data, error } = await getClient()
+  const supabase = getClient();
+  const { data: pool, error: poolError } = await supabase
     .from("pools")
-    .select("id")
+    .select("commissioner_user_id")
     .eq("id", poolId)
-    .eq("commissioner_user_id", userId)
     .maybeSingle();
-  throwIfError(error);
-  return Boolean(data);
+  throwIfError(poolError);
+  if (pool?.commissioner_user_id === userId) return true;
+  const { data: member, error: memberError } = await supabase
+    .from("pool_members")
+    .select("role")
+    .eq("pool_id", poolId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  throwIfError(memberError);
+  return member?.role === "commissioner";
 }
 
 /**
- * True if userId commissions ANY pool attached to this tournament. Tournaments
- * are shared across pools (migration 003), so a tournamentId maps to several
- * commissioners; any of them may run the tournament-keyed admin actions.
+ * True if userId commissions ANY pool attached to this tournament (as the
+ * original commissioner or a co-commissioner). Tournaments are shared across
+ * pools (migration 003), so a tournamentId maps to several commissioners; any
+ * of them may run the tournament-keyed admin actions.
  */
 export async function isCommissionerOfAnyPoolForTournament(userId: string, tournamentId: string): Promise<boolean> {
   const supabase = getClient();
@@ -685,14 +698,42 @@ export async function isCommissionerOfAnyPoolForTournament(userId: string, tourn
   throwIfError(error);
   const poolIds = (links ?? []).map((row: any) => row.pool_id);
   if (poolIds.length === 0) return false;
-  const { data: pools, error: poolError } = await supabase
+  const { data: mainPools, error: poolError } = await supabase
     .from("pools")
     .select("id")
     .in("id", poolIds)
     .eq("commissioner_user_id", userId)
     .limit(1);
   throwIfError(poolError);
-  return (pools ?? []).length > 0;
+  if ((mainPools ?? []).length > 0) return true;
+  const { data: coMember, error: coError } = await supabase
+    .from("pool_members")
+    .select("pool_id")
+    .in("pool_id", poolIds)
+    .eq("user_id", userId)
+    .eq("role", "commissioner")
+    .limit(1);
+  throwIfError(coError);
+  return (coMember ?? []).length > 0;
+}
+
+/**
+ * Grant or revoke co-commissioner status by setting a member's role. The original
+ * commissioner (pools.commissioner_user_id) is permanent and can't be changed.
+ */
+export async function setPoolMemberRoleInSupabase(input: { poolId: string; userId: string; role: "commissioner" | "member" }): Promise<void> {
+  const supabase = getClient();
+  const { data: pool, error: poolError } = await supabase
+    .from("pools")
+    .select("commissioner_user_id")
+    .eq("id", input.poolId)
+    .maybeSingle();
+  throwIfError(poolError);
+  if (!pool) throw new Error("Bracket not found.");
+  if (pool.commissioner_user_id === input.userId) throw new Error("The main commissioner's role can't be changed.");
+  throwIfError(
+    (await supabase.from("pool_members").update({ role: input.role }).eq("pool_id", input.poolId).eq("user_id", input.userId)).error
+  );
 }
 
 /** Resolves the pool for an invite code (used as a proof factor for first-time password set). */

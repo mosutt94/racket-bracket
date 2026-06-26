@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, Download, KeyRound, Lock, Settings, ShieldAlert, Trash2, Users } from "lucide-react";
+import { CalendarClock, Download, KeyRound, Lock, Settings, ShieldAlert, ShieldCheck, Trash2, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { PageLoading } from "@/components/PageLoading";
 import { PasswordField } from "@/components/PasswordField";
 import { PoolNav } from "@/components/PoolNav";
 import { StatusBadge } from "@/components/StatusBadge";
-import { getCachedAppState, getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
+import { getCachedAppState, getCurrentUserForState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
 import { saveCurrentUser } from "@/lib/current-user";
 import { validatePassword } from "@/lib/password-rules";
 import { findTournamentForPool } from "@/lib/state-helpers";
@@ -44,6 +44,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   const [scoringError, setScoringError] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [deleteMessage, setDeleteMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [roleBusyUserId, setRoleBusyUserId] = useState<string | null>(null);
   // First-time password set (for commissioners migrating from no password).
   const [setPw, setSetPw] = useState("");
   const [setPwConfirm, setSetPwConfirm] = useState("");
@@ -90,8 +91,13 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   const activePool = pool;
   const activeTournament = tournament;
   const me = getCurrentUserForState(state);
-  const isCommissioner = activePool.commissionerUserId === me.id;
+  // Co-commissioners (members promoted to the "commissioner" role) get full powers.
+  const isCommissioner = isPoolCommissioner(state, params.poolId);
   const hasPassword = Boolean(me.hasPassword);
+  const roleOf = (userId: string) =>
+    userId === activePool.commissionerUserId
+      ? "commissioner"
+      : state.poolMembers.find((member) => member.poolId === activePool.id && member.userId === userId)?.role ?? "member";
   // A password-protected commissioner whose verified session isn't established
   // on this device — admin actions would fail until they confirm their password.
   const needsReauth = isCommissioner && hasPassword && sessionUserId !== undefined && sessionUserId !== me.id;
@@ -103,10 +109,19 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   // split a person across profile ids), and we must be able to delete every real
   // bracket regardless of whether it maps cleanly to a member row.
   const poolBrackets = state.brackets.filter((item) => item.poolId === activePool.id && item.tournamentId === activeTournament.id);
-  const submittedUserIds = new Set(poolBrackets.map((item) => item.userId));
-  const membersWithoutBracket = members.filter((member) => !submittedUserIds.has(member.userId));
   const profileName = (userId: string) => state.profiles.find((profile) => profile.id === userId)?.displayName ?? "Unknown player";
   const submitted = poolBrackets.filter((bracket) => bracket.status !== "draft");
+  // Unified roster: every member, plus any bracket owner not in the member list
+  // (email-identity drift), so every real participant is manageable.
+  const bracketByUser = new Map(poolBrackets.map((bracket) => [bracket.userId, bracket]));
+  const roster = Array.from(new Set([...members.map((m) => m.userId), ...poolBrackets.map((b) => b.userId)]))
+    .map((userId) => ({
+      userId,
+      bracket: bracketByUser.get(userId) ?? null,
+      role: roleOf(userId),
+      isMainCommissioner: userId === activePool.commissionerUserId
+    }))
+    .sort((a, b) => profileName(a.userId).localeCompare(profileName(b.userId)));
   const activeInstance = state.tournamentInstances.find((instance) => instance.id === activeTournament.tournamentInstanceId);
   const syncRuns = state.providerSyncRuns
     .filter((run) => run.tournamentId === activeTournament.id || run.tournamentInstanceId === activeTournament.tournamentInstanceId)
@@ -232,6 +247,27 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
       setDeleteMessage({ ok: false, text: error instanceof Error ? error.message : "Could not remove member." });
     } finally {
       setDeletingUserId(null);
+    }
+  }
+
+  async function setMemberRole(userId: string, displayName: string, role: "commissioner" | "member") {
+    if (role === "commissioner" && !window.confirm(`Make ${displayName} a co-commissioner? They'll get full admin access to this bracket.`)) return;
+    setRoleBusyUserId(userId);
+    setDeleteMessage(null);
+    try {
+      const response = await fetch("/api/admin/member-role", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ poolId: activePool.id, userId, role })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not update role.");
+      setState(await loadAppState(params.poolId));
+      setDeleteMessage({ ok: true, text: role === "commissioner" ? `${displayName} is now a co-commissioner.` : `${displayName} is no longer a co-commissioner.` });
+    } catch (error) {
+      setDeleteMessage({ ok: false, text: error instanceof Error ? error.message : "Could not update role." });
+    } finally {
+      setRoleBusyUserId(null);
     }
   }
 
@@ -518,49 +554,52 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
           </section>
           <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-black">Submission tracker</h2>
-            <p className="mt-1 text-sm text-slate-600">Removing a member deletes their bracket and takes them off the roster.</p>
+            <p className="mt-1 text-sm text-slate-600">Promote a member to co-commissioner for full admin access, clear a bracket to reset their picks, or remove them entirely.</p>
             <div className="mt-4 space-y-2">
-              {poolBrackets.length === 0 && membersWithoutBracket.length === 0 ? (
-                <p className="text-sm text-slate-500">No members yet.</p>
-              ) : null}
-              {poolBrackets.map((bracket) => (
-                <div key={bracket.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">
-                  <span className="min-w-0 truncate font-semibold">{profileName(bracket.userId)}</span>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <span className="text-sm font-bold capitalize text-slate-600">{bracket.status}</span>
-                    {bracket.userId === activePool.commissionerUserId ? null : (
-                      <button
-                        type="button"
-                        onClick={() => removeMember(bracket.userId, profileName(bracket.userId))}
-                        disabled={deletingUserId === bracket.userId}
-                        aria-label={`Remove ${profileName(bracket.userId)} from the bracket`}
-                        className="inline-flex items-center gap-1 rounded-lg border border-clay-300 bg-white px-2.5 py-1.5 text-xs font-bold text-clay-700 transition hover:bg-clay-100 disabled:opacity-50"
-                      >
-                        <Trash2 size={14} /> {deletingUserId === bracket.userId ? "Removing…" : "Remove"}
-                      </button>
-                    )}
+              {roster.length === 0 ? <p className="text-sm text-slate-500">No members yet.</p> : null}
+              {roster.map(({ userId, bracket, role, isMainCommissioner }) => {
+                const name = profileName(userId);
+                const isCo = role === "commissioner" && !isMainCommissioner;
+                // You can't promote/demote or remove yourself, or touch the main commissioner.
+                const canManage = !isMainCommissioner && userId !== me.id;
+                return (
+                  <div key={userId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold">{name}</span>
+                      {isMainCommissioner ? (
+                        <span className="text-xs font-black uppercase tracking-wide text-court-700">Commissioner</span>
+                      ) : isCo ? (
+                        <span className="text-xs font-black uppercase tracking-wide text-court-700">Co-commissioner</span>
+                      ) : (
+                        <span className="text-xs font-semibold text-slate-400">{bracket ? bracket.status : "not started"}</span>
+                      )}
+                    </span>
+                    <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                      {canManage ? (
+                        <button
+                          type="button"
+                          onClick={() => setMemberRole(userId, name, isCo ? "member" : "commissioner")}
+                          disabled={roleBusyUserId === userId}
+                          className="inline-flex items-center gap-1 rounded-lg border border-court-200 bg-white px-2.5 py-1.5 text-xs font-bold text-court-800 transition hover:bg-court-50 disabled:opacity-50"
+                        >
+                          <ShieldCheck size={14} /> {roleBusyUserId === userId ? "Saving…" : isCo ? "Remove co-commish" : "Make co-commish"}
+                        </button>
+                      ) : null}
+                      {canManage ? (
+                        <button
+                          type="button"
+                          onClick={() => removeMember(userId, name)}
+                          disabled={deletingUserId === userId}
+                          aria-label={`Remove ${name} from the bracket`}
+                          className="inline-flex items-center gap-1 rounded-lg border border-clay-300 bg-white px-2.5 py-1.5 text-xs font-bold text-clay-700 transition hover:bg-clay-100 disabled:opacity-50"
+                        >
+                          <Trash2 size={14} /> {deletingUserId === userId ? "Removing…" : "Remove"}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ))}
-              {membersWithoutBracket.map((member) => (
-                <div key={member.userId} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">
-                  <span className="min-w-0 truncate font-semibold">{profileName(member.userId)}</span>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <span className="text-sm font-bold text-slate-400">not started</span>
-                    {member.userId === activePool.commissionerUserId ? null : (
-                      <button
-                        type="button"
-                        onClick={() => removeMember(member.userId, profileName(member.userId))}
-                        disabled={deletingUserId === member.userId}
-                        aria-label={`Remove ${profileName(member.userId)} from the bracket`}
-                        className="inline-flex items-center gap-1 rounded-lg border border-clay-300 bg-white px-2.5 py-1.5 text-xs font-bold text-clay-700 transition hover:bg-clay-100 disabled:opacity-50"
-                      >
-                        <Trash2 size={14} /> {deletingUserId === member.userId ? "Removing…" : "Remove"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             {deleteMessage ? (
               <p
