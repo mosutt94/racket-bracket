@@ -7,6 +7,7 @@ import { PasswordField } from "@/components/PasswordField";
 import { getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
 import { getSavedCurrentUser, saveCurrentUser } from "@/lib/current-user";
 import { validatePassword } from "@/lib/password-rules";
+import { getUpcomingSlam } from "@/lib/services/bracket-shell-service";
 import type { Gender, Profile, SlamType } from "@/lib/types";
 
 const SLAM_OPTIONS: Array<{ value: SlamType; label: string }> = [
@@ -18,11 +19,12 @@ const SLAM_OPTIONS: Array<{ value: SlamType; label: string }> = [
 
 export default function CreatePoolPage() {
   const router = useRouter();
-  const currentYear = new Date().getFullYear();
+  // Default to the current/upcoming Slam (date-aware) instead of a fixed one.
+  const upcoming = getUpcomingSlam();
   const [name, setName] = useState("Sunday Slam Club");
-  const [slamType, setSlamType] = useState<SlamType>("french_open");
+  const [slamType, setSlamType] = useState<SlamType>(upcoming.slamType);
   const [gender, setGender] = useState<Gender>("men");
-  const [year, setYear] = useState<number>(currentYear);
+  const [year, setYear] = useState<number>(upcoming.year);
   const [user, setUser] = useState<Profile | null>(null);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");

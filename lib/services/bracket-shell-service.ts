@@ -123,6 +123,23 @@ export function getSlamCalendarDefaults(slamType: SlamType, year: number): SlamC
   }
 }
 
+const SLAM_ORDER: SlamType[] = ["australian_open", "french_open", "wimbledon", "us_open"];
+
+/**
+ * The most relevant Slam to default a new bracket to, given today's date: the
+ * next Grand Slam whose final hasn't happened yet (so it stays current through
+ * the tournament). After the US Open concludes, rolls to next year's Australian
+ * Open. Keeps the create form from defaulting to a Slam that's already over.
+ */
+export function getUpcomingSlam(now: Date = new Date()): { slamType: SlamType; year: number } {
+  const year = now.getUTCFullYear();
+  for (const slamType of SLAM_ORDER) {
+    const final = new Date(getSlamCalendarDefaults(slamType, year).finalStartsAt);
+    if (now <= final) return { slamType, year };
+  }
+  return { slamType: "australian_open", year: year + 1 };
+}
+
 export function getSlamDisplayName(slamType: SlamType, year: number, gender: Gender): string {
   const slamName: Record<SlamType, string> = {
     australian_open: "Australian Open",
