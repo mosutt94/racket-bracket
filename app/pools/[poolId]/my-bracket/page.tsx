@@ -7,7 +7,7 @@ import { BracketBoard } from "@/components/BracketBoard";
 import { PageLoading } from "@/components/PageLoading";
 import { PoolNav } from "@/components/PoolNav";
 import { getCachedAppState, getCurrentUserForState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
-import { isBracketComplete, pickWinner } from "@/lib/services/bracket-service";
+import { pickWinner } from "@/lib/services/bracket-service";
 import { getSlamShortLabel } from "@/lib/services/bracket-shell-service";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import { useAutoSync } from "@/lib/use-auto-sync";
@@ -157,7 +157,6 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
   const userLocked = activeBracket.status !== "draft";
   const pickingClosed = tournament.status !== "picking_open";
   const locked = userLocked || pickingClosed;
-  const complete = isBracketComplete(activeBracket.id, matches, state.bracketPicks);
   const pickedCount = matches.filter((match) => state.bracketPicks.some((pick) => pick.bracketId === activeBracket.id && pick.matchId === match.id)).length;
   const sortedMatches = [...matches].sort((a, b) => a.roundNumber - b.roundNumber || a.matchNumber - b.matchNumber);
   const nextMissingMatch = sortedMatches.find((match) => !state.bracketPicks.some((pick) => pick.bracketId === activeBracket.id && pick.matchId === match.id));
@@ -278,16 +277,6 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
               </button>
             ) : null}
             <div className="ml-auto flex items-center gap-2">
-              <span
-                className={
-                  complete
-                    ? "inline-flex shrink-0 items-center gap-1 rounded-full bg-court-100 px-2.5 py-1 text-xs font-black text-court-700"
-                    : "inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-500"
-                }
-                title="A bracket is complete once every pick is filled in"
-              >
-                {complete ? "Complete" : `Incomplete · ${pickedCount}/${matches.length}`}
-              </span>
               {!locked ? (
                 <button
                   onClick={() => persist("draft")}
