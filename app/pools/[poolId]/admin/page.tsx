@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, Download, Eraser, KeyRound, Lock, Settings, ShieldAlert, ShieldCheck, Trash2, Users } from "lucide-react";
+import { CalendarClock, Copy, Download, Eraser, KeyRound, Lock, Settings, Share2, ShieldAlert, ShieldCheck, Trash2, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { PageLoading } from "@/components/PageLoading";
@@ -65,8 +65,13 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   const [reauthPw, setReauthPw] = useState("");
   const [reauthBusy, setReauthBusy] = useState(false);
   const [reauthError, setReauthError] = useState<string | null>(null);
+  // Origin for building the absolute invite link (window is only available
+  // after mount, so keep it in state to avoid an SSR hydration mismatch).
+  const [origin, setOrigin] = useState("");
+  const [copiedInvite, setCopiedInvite] = useState(false);
 
   useEffect(() => {
+    setOrigin(window.location.origin);
     loadAppState(params.poolId).then(setState);
     fetch("/api/auth/commissioner-status")
       .then((r) => r.json())
@@ -466,6 +471,35 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
           <Metric icon={<CalendarClock />} label="Draw status" value={activeInstance?.status.replace("_", " ") ?? activeTournament.status} small />
           <Metric icon={<Settings />} label="Last sync" value={formatDateTime(activeTournament.lastSyncedAt ?? activeInstance?.lastSyncedAt)} small />
         </div>
+        <section className="mt-6 rounded-xl border border-court-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-2 text-court-700">
+            <Share2 size={18} />
+            <p className="text-xs font-black uppercase tracking-wide">Invite friends</p>
+          </div>
+          <h2 className="mt-2 text-xl font-black text-ink">Share this bracket</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Send this link to anyone you want in {activePool.name}. They can join and fill out their bracket while picks are open.
+          </p>
+          <div className="mt-4 rounded-lg border border-court-200 bg-court-50 p-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-court-700">Invite link</p>
+            <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="min-w-0 truncate text-sm font-semibold text-court-900">
+                {origin ? `${origin}/join/${activePool.inviteCode}` : `/join/${activePool.inviteCode}`}
+              </p>
+              <button
+                onClick={async () => {
+                  await copyText(`${window.location.origin}/join/${activePool.inviteCode}`);
+                  setCopiedInvite(true);
+                  window.setTimeout(() => setCopiedInvite(false), 1600);
+                }}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-court-200 bg-white px-3 py-2 text-sm font-bold text-court-800 hover:bg-court-100"
+              >
+                <Copy size={15} /> {copiedInvite ? "Copied" : "Copy link"}
+              </button>
+            </div>
+            <p className="mt-2 text-xs font-semibold text-slate-500">Invite code: {activePool.inviteCode}</p>
+          </div>
+        </section>
         <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_1fr]">
           <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm lg:col-span-2">
             <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
@@ -732,4 +766,21 @@ function Metric({ icon, label, value, small }: { icon: React.ReactNode; label: s
       <p className={small ? "mt-1 text-sm font-black" : "mt-1 text-2xl font-black"}>{value}</p>
     </div>
   );
+}
+
+async function copyText(value: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+    return;
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textarea);
+  }
 }

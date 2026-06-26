@@ -45,10 +45,13 @@ export function PoolNav({
   }
 
   // The home-icon "Brackets" pill returns to the cross-bracket overview
-  // (/dashboard). Only show it once we know the user is in more than one
-  // bracket — for a single-bracket user the overview is just that one bracket,
-  // so the link is clutter. Hidden until the count is known to avoid a flash.
-  const showBrackets = poolCount !== null && poolCount > 1;
+  // (/dashboard). Commissioners always get it — they manage things from the
+  // overview (invites, multiple brackets) and shouldn't be stranded on a single
+  // bracket with no way back. For everyone else, only show it once we know
+  // they're in more than one bracket — for a single-bracket participant the
+  // overview is just that one bracket, so the link is clutter. Hidden until the
+  // count is known to avoid a flash.
+  const showBrackets = isCommissioner || (poolCount !== null && poolCount > 1);
   const links: Array<{ label: string; href: string; icon?: ReactNode }> = [
     ...(showBrackets ? [{ label: "Brackets", href: "/dashboard", icon: <Home size={14} /> }] : []),
     { label: "Tournament", href: `/pools/${poolId}/bracket` },
