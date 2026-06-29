@@ -11,7 +11,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { getCachedAppState, getCurrentUserForState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
 import { saveCurrentUser } from "@/lib/current-user";
 import { validatePassword } from "@/lib/password-rules";
-import { findTournamentForPool } from "@/lib/state-helpers";
+import { findTournamentForPool, isPickingClosed } from "@/lib/state-helpers";
 import type { AppState, TournamentRound, TournamentStatus } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
 
@@ -117,6 +117,9 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
     ? autoLockAt!.toLocaleString("en-US", { timeZone: "America/New_York", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
     : null;
   const autoLockPassed = autoLockValid && Date.now() >= autoLockAt!.getTime();
+  // Scoring is shared across all pools on this Slam, so it's frozen once play
+  // begins (picks closed) — the server rejects edits too; this just reflects it.
+  const scoringLocked = isPickingClosed(activeTournament);
   const members = state.poolMembers.filter((member) => member.poolId === activePool.id);
   // Drive the submission tracker off the brackets that actually exist for this
   // pool, not the member list. The two can drift apart (email-based identity can
@@ -717,6 +720,11 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
           <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm lg:col-span-2">
             <h2 className="text-lg font-black">Scoring</h2>
             <p className="mt-1 text-sm text-slate-600">Points awarded per correct pick in each round. Set these before the tournament starts.</p>
+            {scoringLocked ? (
+              <p className="mt-3 rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600">
+                🔒 Scoring is locked because the tournament has started. It can&apos;t be changed once play is underway.
+              </p>
+            ) : null}
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {scoringRounds.map((round) => (
                 <label key={round.id} className="grid gap-1 text-sm font-semibold text-slate-700">
@@ -724,7 +732,8 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
                   <input
                     type="number"
                     min={0}
-                    className="rounded-lg border border-slate-200 px-3 py-2"
+                    disabled={scoringLocked}
+                    className="rounded-lg border border-slate-200 px-3 py-2 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                     value={round.pointsPerCorrectPick}
                     onChange={(event) =>
                       setScoringRounds((items) =>
@@ -736,13 +745,15 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
               ))}
             </div>
             {scoringError ? <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{scoringError}</p> : null}
-            <button
-              onClick={saveScoring}
-              disabled={scoringSave === "saving"}
-              className="mt-4 rounded-lg bg-court-700 px-4 py-3 font-bold text-white disabled:bg-slate-300"
-            >
-              {scoringSave === "saving" ? "Saving..." : scoringSave === "saved" ? "Saved" : "Save scoring"}
-            </button>
+            {!scoringLocked ? (
+              <button
+                onClick={saveScoring}
+                disabled={scoringSave === "saving"}
+                className="mt-4 rounded-lg bg-court-700 px-4 py-3 font-bold text-white disabled:bg-slate-300"
+              >
+                {scoringSave === "saving" ? "Saving..." : scoringSave === "saved" ? "Saved" : "Save scoring"}
+              </button>
+            ) : null}
           </section>
           {isCommissioner && hasPassword ? (
             <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">

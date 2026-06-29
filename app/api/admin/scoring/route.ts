@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isSupabaseConfigured, updateTournamentScoringInSupabase } from "@/lib/supabase/persistence";
+import { isSupabaseConfigured, isTournamentPickingClosedInSupabase, updateTournamentScoringInSupabase } from "@/lib/supabase/persistence";
 import { requireCommissionerForTournament } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +19,16 @@ export async function POST(request: Request) {
 
   const guard = await requireCommissionerForTournament(tournamentId);
   if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+
+  // Scoring is shared across every pool on this Slam, so freeze it once play
+  // begins — otherwise one commissioner could re-score a live tournament for
+  // everyone. Set the points before the tournament starts.
+  if (await isTournamentPickingClosedInSupabase(tournamentId)) {
+    return NextResponse.json(
+      { ok: false, error: "Scoring is locked once the tournament has started." },
+      { status: 403 }
+    );
+  }
 
   const normalized = rounds
     .filter((round: any) => Number.isInteger(round?.roundNumber) && Number.isFinite(round?.pointsPerCorrectPick))

@@ -798,6 +798,26 @@ export async function setTournamentStatusInSupabase(input: {
   }
 }
 
+/**
+ * Whether a tournament's picking has closed — the commissioner locked the status
+ * or the auto-lock picking deadline has passed. Used to freeze scoring once play
+ * begins, so a live, shared-per-Slam tournament can't be re-scored mid-event.
+ */
+export async function isTournamentPickingClosedInSupabase(tournamentId: string): Promise<boolean> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("tournaments")
+    .select("status, picking_deadline")
+    .eq("id", tournamentId)
+    .maybeSingle();
+  throwIfError(error);
+  if (!data) return false;
+  if (data.status !== "picking_open") return true;
+  if (data.picking_deadline == null) return false;
+  const deadline = new Date(data.picking_deadline).getTime();
+  return !Number.isNaN(deadline) && Date.now() >= deadline;
+}
+
 export async function updateTournamentScoringInSupabase(input: {
   tournamentId: string;
   rounds: Array<{ roundNumber: number; pointsPerCorrectPick: number }>;
