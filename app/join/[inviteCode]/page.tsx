@@ -211,6 +211,8 @@ export default function InviteJoinPage({ params }: { params: { inviteCode: strin
 
   if (phase === "checking") return <PageLoading />;
 
+  // Only signed-in visitors have a "my brackets" page to go to.
+  const isSignedIn = Boolean(getSavedCurrentUser());
   const createdBy = preview?.commissionerName ? `Created by ${preview.commissionerName}` : null;
   const errorBox = error ? (
     <p className="mt-4 rounded-lg bg-clay-100 px-3 py-2 text-sm font-semibold text-clay-700">{error}</p>
@@ -244,12 +246,14 @@ export default function InviteJoinPage({ params }: { params: { inviteCode: strin
               >
                 Sign in to your bracket <ArrowRight size={18} />
               </button>
-              <a
-                href="/dashboard"
-                className="mt-3 block w-full text-center text-sm font-semibold text-slate-500 hover:text-court-700"
-              >
-                Go to my brackets
-              </a>
+              {isSignedIn ? (
+                <a
+                  href="/dashboard"
+                  className="mt-3 block w-full text-center text-sm font-semibold text-slate-500 hover:text-court-700"
+                >
+                  Go to my brackets
+                </a>
+              ) : null}
             </>
           ) : phase === "signed-in" ? (
             <>
