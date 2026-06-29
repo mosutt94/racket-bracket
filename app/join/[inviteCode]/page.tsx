@@ -220,7 +220,7 @@ export default function InviteJoinPage({ params }: { params: { inviteCode: strin
 
   return (
     <AppFrame>
-      <main className="mx-auto flex min-h-[calc(100vh-65px)] max-w-xl items-center px-4 py-10">
+      <main className="mx-auto flex min-h-[calc(100dvh-65px)] max-w-xl items-center px-4 py-10">
         <section className="w-full rounded-xl border border-court-200 bg-white p-6 shadow-soft">
           {phase === "invalid" ? (
             <>

@@ -29,7 +29,7 @@ export function AppFrame({ children, compact = false, slam }: { children: React.
   return (
     // data-slam re-themes the `court` accent + page background for this Slam
     // (see globals.css). Absent on non-pool pages, so they keep the default green.
-    <div data-slam={slam ?? undefined} className="min-h-screen bg-[var(--app-bg)]">
+    <div data-slam={slam ?? undefined} className="min-h-[100dvh] bg-[var(--app-bg)]">
       {!compact ? <header className="bg-court-900 text-white shadow-md">
         <div
           className={cn(
