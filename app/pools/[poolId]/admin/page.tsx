@@ -476,7 +476,6 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
         <div className="mb-4 mt-1">
           <p className="text-xs font-bold uppercase tracking-wide text-court-700 sm:text-sm">Commissioner dashboard</p>
           <h1 className="text-2xl font-black text-ink sm:text-3xl">{activePool.name}</h1>
-          {!isCommissioner ? <p className="mt-2 text-sm font-semibold text-clay-700">Only the commissioner can use these tools.</p> : null}
         </div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Metric icon={<Users />} label="Members" value={members.length} />
