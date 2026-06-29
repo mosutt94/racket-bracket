@@ -117,9 +117,10 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
     ? autoLockAt!.toLocaleString("en-US", { timeZone: "America/New_York", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
     : null;
   const autoLockPassed = autoLockValid && Date.now() >= autoLockAt!.getTime();
-  // Scoring is shared across all pools on this Slam, so it's frozen once play
-  // begins (picks closed) — the server rejects edits too; this just reflects it.
-  const scoringLocked = isPickingClosed(activeTournament);
+  // Once play begins (picks closed) the shared-per-Slam destructive actions are
+  // frozen — scoring edits and the clear-all-picks re-import. The server rejects
+  // them too; these flags just reflect that in the UI.
+  const tournamentStarted = isPickingClosed(activeTournament);
   const members = state.poolMembers.filter((member) => member.poolId === activePool.id);
   // Drive the submission tracker off the brackets that actually exist for this
   // pool, not the member list. The two can drift apart (email-based identity can
@@ -560,13 +561,21 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
                 <button onClick={() => importDraw(false)} disabled={importBusy} className="rounded-lg bg-ink px-4 py-3 font-bold text-white disabled:bg-slate-300">
                   {importBusy ? "Importing..." : "Import draw / refresh seeds"}
                 </button>
-                <button
-                  onClick={confirmResetImport}
-                  disabled={importBusy}
-                  className="rounded-lg border border-clay-300 px-4 py-2 text-sm font-bold text-clay-700 transition hover:bg-clay-100 disabled:opacity-50"
-                >
-                  Re-import &amp; clear all picks
-                </button>
+                {/* Clearing all picks wipes every pool on this Slam — only ever
+                    available before play starts; the server enforces this too. */}
+                {tournamentStarted ? (
+                  <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-500">
+                    🔒 Re-importing the draw is locked once the tournament has started.
+                  </p>
+                ) : (
+                  <button
+                    onClick={confirmResetImport}
+                    disabled={importBusy}
+                    className="rounded-lg border border-clay-300 px-4 py-2 text-sm font-bold text-clay-700 transition hover:bg-clay-100 disabled:opacity-50"
+                  >
+                    Re-import &amp; clear all picks
+                  </button>
+                )}
               </div>
               {importStatus ? (
                 <p className={importStatus.ok ? "mt-3 text-sm font-bold text-court-700" : "mt-3 text-sm font-bold text-clay-700"}>
@@ -720,7 +729,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
           <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm lg:col-span-2">
             <h2 className="text-lg font-black">Scoring</h2>
             <p className="mt-1 text-sm text-slate-600">Points awarded per correct pick in each round. Set these before the tournament starts.</p>
-            {scoringLocked ? (
+            {tournamentStarted ? (
               <p className="mt-3 rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600">
                 🔒 Scoring is locked because the tournament has started. It can&apos;t be changed once play is underway.
               </p>
@@ -732,7 +741,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
                   <input
                     type="number"
                     min={0}
-                    disabled={scoringLocked}
+                    disabled={tournamentStarted}
                     className="rounded-lg border border-slate-200 px-3 py-2 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                     value={round.pointsPerCorrectPick}
                     onChange={(event) =>
@@ -745,7 +754,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
               ))}
             </div>
             {scoringError ? <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{scoringError}</p> : null}
-            {!scoringLocked ? (
+            {!tournamentStarted ? (
               <button
                 onClick={saveScoring}
                 disabled={scoringSave === "saving"}

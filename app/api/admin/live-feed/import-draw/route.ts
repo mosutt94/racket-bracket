@@ -5,6 +5,7 @@ import {
   getAppStateFromSupabase,
   importEspnDrawInSupabase,
   isSupabaseConfigured,
+  isTournamentPickingClosedInSupabase,
   refreshDrawSeedsInSupabase,
   tournamentHasPicksInSupabase
 } from "@/lib/supabase/persistence";
@@ -33,6 +34,16 @@ export async function POST(request: Request) {
   // Destructive (can reset existing picks) — gate firmly to the commissioner.
   const guard = await requireCommissionerForTournament(tournamentId);
   if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+
+  // Clearing all picks wipes every pool on this shared Slam. Never allow it once
+  // play has begun — that would nuke a live tournament for everyone. (The safe,
+  // pick-preserving seed refresh below stays available.)
+  if (resetExistingPicks && (await isTournamentPickingClosedInSupabase(tournamentId))) {
+    return NextResponse.json(
+      { ok: false, error: "Clearing all picks is locked once the tournament has started." },
+      { status: 403 }
+    );
+  }
 
   try {
     const provider = new EspnTennisProvider();
