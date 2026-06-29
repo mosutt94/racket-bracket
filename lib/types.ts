@@ -64,6 +64,15 @@ export interface TournamentRound {
   pointsPerCorrectPick: number;
 }
 
+// A pool's own points for a round, overriding the shared tournament_rounds value.
+// Absent => the pool inherits the shared value.
+export interface PoolRoundScoring {
+  id: string;
+  poolId: string;
+  roundNumber: number;
+  pointsPerCorrectPick: number;
+}
+
 export interface Player {
   id: string;
   externalProviderId?: string | null;
@@ -226,6 +235,7 @@ export interface AppState {
   tennisDataProviders: TennisDataProviderConfig[];
   tournamentInstances: TournamentInstance[];
   poolTournaments: PoolTournament[];
+  poolRoundScoring: PoolRoundScoring[];
   drawSlots: DrawSlot[];
   providerSyncRuns: ProviderSyncRun[];
   manualOverrides: ManualOverride[];

@@ -7,11 +7,10 @@ import { AppFrame } from "@/components/AppFrame";
 import { PageLoading } from "@/components/PageLoading";
 import { PasswordField } from "@/components/PasswordField";
 import { PoolNav } from "@/components/PoolNav";
-import { StatusBadge } from "@/components/StatusBadge";
 import { getCachedAppState, getCurrentUserForState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
 import { saveCurrentUser } from "@/lib/current-user";
 import { validatePassword } from "@/lib/password-rules";
-import { findTournamentForPool, isPickingClosed } from "@/lib/state-helpers";
+import { effectivePoolRounds, findTournamentForPool, isPickingClosed, isPoolPickingClosed } from "@/lib/state-helpers";
 import type { AppState, TournamentRound, TournamentStatus } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
 
@@ -94,7 +93,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
     const t = findTournamentForPool(state, params.poolId);
     if (!t) return;
     setScoringRounds(
-      state.rounds.filter((round) => round.tournamentId === t.id).sort((a, b) => a.roundNumber - b.roundNumber)
+      effectivePoolRounds(state, params.poolId, t.id).sort((a, b) => a.roundNumber - b.roundNumber)
     );
   }, [state, params.poolId]);
 
@@ -121,7 +120,6 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   // on this device — admin actions would fail until they confirm their password.
   const needsReauth = isCommissioner && hasPassword && sessionUserId !== undefined && sessionUserId !== me.id;
   const isPickingOpen = activeTournament.status === "picking_open";
-  const isLocked = activeTournament.status === "locked";
   // Scheduled auto-lock: while picking is open, picks freeze automatically once
   // the picking deadline passes (so play can't start with brackets still open).
   const autoLockAt = isPickingOpen && activeTournament.pickingDeadline ? new Date(activeTournament.pickingDeadline) : null;
@@ -134,6 +132,12 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   // frozen — scoring edits and the clear-all-picks re-import. The server rejects
   // them too; these flags just reflect that in the UI.
   const tournamentStarted = isPickingClosed(activeTournament);
+  // Per-pool picking lock: this pool's own early lock, plus the shared Slam start.
+  // The commissioner controls their own pool's lock; once the Slam starts everyone
+  // is locked regardless. Scoring edits freeze when this pool's picks close.
+  const poolTournament = state.poolTournaments.find((pt) => pt.poolId === activePool.id);
+  const poolLocked = Boolean(poolTournament?.lockedAt);
+  const poolPickingClosed = isPoolPickingClosed(state, params.poolId);
   const members = state.poolMembers.filter((member) => member.poolId === activePool.id);
   // Drive the submission tracker off the brackets that actually exist for this
   // pool, not the member list. The two can drift apart (email-based identity can
@@ -167,21 +171,22 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
     .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
   const lastSync = syncRuns[0];
 
-  async function setTournamentStatus(status: TournamentStatus) {
-    setStatusBusy(status);
+  // Per-pool lock/unlock — affects only this pool's picking, not the whole Slam.
+  async function setPoolLock(locked: boolean) {
+    setStatusBusy(locked ? "locked" : "picking_open");
     setStatusMessage(null);
     try {
-      const response = await fetch("/api/admin/tournament-status", {
+      const response = await fetch("/api/admin/pool-lock", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tournamentId: activeTournament.id, status })
+        body: JSON.stringify({ poolId: activePool.id, locked })
       });
       const result = await response.json();
-      if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not update status.");
+      if (!response.ok || !result.ok) throw new Error(result.error ?? "Could not update lock.");
       setState(await loadAppState(params.poolId));
-      setStatusMessage({ ok: true, text: status === "picking_open" ? "Picking is now open." : "Picking is now locked." });
+      setStatusMessage({ ok: true, text: locked ? "Your bracket's picking is now locked." : "Your bracket's picking is open." });
     } catch (error) {
-      setStatusMessage({ ok: false, text: error instanceof Error ? error.message : "Could not update status." });
+      setStatusMessage({ ok: false, text: error instanceof Error ? error.message : "Could not update lock." });
     } finally {
       setStatusBusy(null);
     }
@@ -250,11 +255,11 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
     setScoringSave("saving");
     setScoringError(null);
     try {
-      const response = await fetch("/api/admin/scoring", {
+      const response = await fetch("/api/admin/pool-scoring", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tournamentId: activeTournament.id,
+          poolId: activePool.id,
           rounds: scoringRounds.map((round) => ({ roundNumber: round.roundNumber, pointsPerCorrectPick: round.pointsPerCorrectPick }))
         })
       });
@@ -605,33 +610,44 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
           ) : null}
           <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-black">Bracket tools</h2>
+            <p className="mt-1 text-sm text-slate-600">Lock or unlock picking for <span className="font-bold">this bracket only</span> — other brackets aren&apos;t affected.</p>
             <div className="mt-3 flex items-center gap-2 text-sm font-semibold text-slate-600">
-              <span>Picking status:</span>
-              <StatusBadge status={activeTournament.status} />
+              <span>Picking:</span>
+              <span className={poolPickingClosed
+                ? "rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-500"
+                : "rounded-full bg-court-100 px-2.5 py-1 text-xs font-black text-court-700"}>
+                {tournamentStarted ? "Closed — tournament started" : poolLocked ? "Locked" : "Open"}
+              </span>
             </div>
             {autoLockLabel ? (
               <p className="mt-2 text-xs font-semibold text-slate-500">
                 {autoLockPassed
-                  ? `Picks auto-locked ${autoLockLabel} ET (tournament start). Lock picking to make it permanent.`
+                  ? `Auto-locked ${autoLockLabel} ET (tournament start).`
                   : `Auto-locks ${autoLockLabel} ET — you don't have to lock manually.`}
               </p>
             ) : null}
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <button
-                onClick={() => setTournamentStatus("locked")}
-                disabled={statusBusy !== null || isLocked}
-                className="rounded-lg bg-ink px-4 py-3 font-bold text-white transition hover:bg-court-900 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {statusBusy === "locked" ? "Locking…" : isLocked ? "Picking locked" : "Lock picking"}
-              </button>
-              <button
-                onClick={() => setTournamentStatus("picking_open")}
-                disabled={statusBusy !== null || isPickingOpen}
-                className="rounded-lg border border-court-200 px-4 py-3 font-bold text-court-800 transition hover:bg-court-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {statusBusy === "picking_open" ? "Unlocking…" : isPickingOpen ? "Picking open" : "Unlock picking"}
-              </button>
-            </div>
+            {tournamentStarted ? (
+              <p className="mt-4 rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600">
+                🔒 The tournament has started — picking is closed and can&apos;t be reopened.
+              </p>
+            ) : (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <button
+                  onClick={() => setPoolLock(true)}
+                  disabled={statusBusy !== null || poolLocked}
+                  className="rounded-lg bg-ink px-4 py-3 font-bold text-white transition hover:bg-court-900 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {statusBusy === "locked" ? "Locking…" : poolLocked ? "Picking locked" : "Lock picking"}
+                </button>
+                <button
+                  onClick={() => setPoolLock(false)}
+                  disabled={statusBusy !== null || !poolLocked}
+                  className="rounded-lg border border-court-200 px-4 py-3 font-bold text-court-800 transition hover:bg-court-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {statusBusy === "picking_open" ? "Unlocking…" : !poolLocked ? "Picking open" : "Unlock picking"}
+                </button>
+              </div>
+            )}
             {statusMessage ? (
               <p
                 className={
@@ -751,10 +767,10 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
           </section>
           <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm lg:col-span-2">
             <h2 className="text-lg font-black">Scoring</h2>
-            <p className="mt-1 text-sm text-slate-600">Points awarded per correct pick in each round. Set these before the tournament starts.</p>
-            {tournamentStarted ? (
+            <p className="mt-1 text-sm text-slate-600">Points awarded per correct pick in each round, for <span className="font-bold">this bracket only</span>. Set these before the tournament starts.</p>
+            {poolPickingClosed ? (
               <p className="mt-3 rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600">
-                🔒 Scoring is locked because the tournament has started. It can&apos;t be changed once play is underway.
+                🔒 Scoring is locked because picking has closed. It can&apos;t be changed once play is underway.
               </p>
             ) : null}
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -764,7 +780,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
                   <input
                     type="number"
                     min={0}
-                    disabled={tournamentStarted}
+                    disabled={poolPickingClosed}
                     className="rounded-lg border border-slate-200 px-3 py-2 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                     value={round.pointsPerCorrectPick}
                     onChange={(event) =>
@@ -777,7 +793,7 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
               ))}
             </div>
             {scoringError ? <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{scoringError}</p> : null}
-            {!tournamentStarted ? (
+            {!poolPickingClosed ? (
               <button
                 onClick={saveScoring}
                 disabled={scoringSave === "saving"}

@@ -7,7 +7,7 @@ import { PageLoading } from "@/components/PageLoading";
 import { PoolNav } from "@/components/PoolNav";
 import { getCachedAppState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
 import { getSlamShortLabel } from "@/lib/services/bracket-shell-service";
-import { findTournamentForPool, isPickingClosed } from "@/lib/state-helpers";
+import { effectivePoolRounds, findTournamentForPool, isPoolPickingClosed } from "@/lib/state-helpers";
 import type { AppState } from "@/lib/types";
 
 export default function MemberBracketPage({ params }: { params: { poolId: string; userId: string } }) {
@@ -26,12 +26,12 @@ export default function MemberBracketPage({ params }: { params: { poolId: string
     (item) => item.poolId === params.poolId && item.tournamentId === tournament.id && item.userId === params.userId
   );
   const matches = state.matches.filter((match) => match.tournamentId === tournament.id);
-  const rounds = state.rounds.filter((round) => round.tournamentId === tournament.id);
+  const rounds = effectivePoolRounds(state, params.poolId, tournament.id);
   const pickedCount = memberBracket
     ? state.bracketPicks.filter((pick) => pick.bracketId === memberBracket.id).length
     : 0;
   // Anti-copy: other members' brackets stay hidden until picking closes.
-  const pickingClosed = isPickingClosed(tournament);
+  const pickingClosed = isPoolPickingClosed(state, params.poolId);
 
   return (
     <AppFrame compact slam={tournament.slamType}>

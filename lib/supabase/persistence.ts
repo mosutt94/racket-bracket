@@ -195,6 +195,15 @@ function mapPoolTournament(row: any) {
   };
 }
 
+function mapPoolRoundScoring(row: any) {
+  return {
+    id: row.id,
+    poolId: row.pool_id,
+    roundNumber: row.round_number,
+    pointsPerCorrectPick: row.points_per_correct_pick
+  };
+}
+
 function mapDrawSlot(row: any) {
   return {
     id: row.id,
@@ -288,6 +297,7 @@ export async function getAppStateFromSupabase(): Promise<AppState> {
     matches,
     tournamentInstances,
     poolTournaments,
+    poolRoundScoring,
     drawSlots,
     providerSyncRuns,
     manualOverrides,
@@ -305,6 +315,7 @@ export async function getAppStateFromSupabase(): Promise<AppState> {
     fetchAllRows((from, to) => supabase.from("matches").select("*").order("id", { ascending: true }).range(from, to)).then((data) => ({ data, error: null })),
     supabase.from("tournament_instances").select("*").range(0, 9999),
     supabase.from("pool_tournaments").select("*").range(0, 9999),
+    supabase.from("pool_round_scoring").select("*").range(0, 9999),
     supabase.from("draw_slots").select("*").range(0, 9999),
     supabase.from("provider_sync_runs").select("*").order("started_at", { ascending: false }).range(0, 9999),
     supabase.from("manual_overrides").select("*").order("created_at", { ascending: false }).range(0, 9999),
@@ -321,6 +332,7 @@ export async function getAppStateFromSupabase(): Promise<AppState> {
     matches.error,
     tournamentInstances.error,
     poolTournaments.error,
+    poolRoundScoring.error,
     drawSlots.error,
     providerSyncRuns.error,
     manualOverrides.error,
@@ -343,6 +355,7 @@ export async function getAppStateFromSupabase(): Promise<AppState> {
     liveScoreSnapshots: [],
     tournamentInstances: (tournamentInstances.data ?? []).map(mapTournamentInstance),
     poolTournaments: (poolTournaments.data ?? []).map(mapPoolTournament),
+    poolRoundScoring: (poolRoundScoring.data ?? []).map(mapPoolRoundScoring),
     drawSlots: (drawSlots.data ?? []).map(mapDrawSlot),
     providerSyncRuns: (providerSyncRuns.data ?? []).map(mapProviderSyncRun),
     manualOverrides: (manualOverrides.data ?? []).map(mapManualOverride),
@@ -404,6 +417,7 @@ export async function getAppStateForPoolFromSupabase(poolId: string): Promise<Ap
       liveScoreSnapshots: [],
       tournamentInstances: [],
       poolTournaments: (poolTournamentRows ?? []).map(mapPoolTournament),
+      poolRoundScoring: [],
       drawSlots: [],
       providerSyncRuns: [],
       manualOverrides: [],
@@ -427,7 +441,8 @@ export async function getAppStateForPoolFromSupabase(poolId: string): Promise<Ap
     drawSlotsRes,
     providerSyncRuns,
     manualOverrides,
-    bracketBundle
+    bracketBundle,
+    poolRoundScoringRes
   ] = await Promise.all([
     supabase.from("profiles").select("*").range(0, 9999),
     supabase.from("pools").select("*").eq("id", poolId),
@@ -444,9 +459,10 @@ export async function getAppStateForPoolFromSupabase(poolId: string): Promise<Ap
       : supabase.from("draw_slots").select("*").in("tournament_instance_id", tournamentIds),
     supabase.from("provider_sync_runs").select("*").in("tournament_id", tournamentIds).order("started_at", { ascending: false }),
     supabase.from("manual_overrides").select("*").in("tournament_id", tournamentIds).order("created_at", { ascending: false }),
-    getBracketBundle({ poolId })
+    getBracketBundle({ poolId }),
+    supabase.from("pool_round_scoring").select("*").eq("pool_id", poolId)
   ]);
-  [profiles.error, pools.error, poolMembers.error, tennisDataProviders.error, tournaments.error, rounds.error, matchesRes.error, tournamentInstances.error, drawSlotsRes.error, providerSyncRuns.error, manualOverrides.error].forEach(throwIfError);
+  [profiles.error, pools.error, poolMembers.error, tennisDataProviders.error, tournaments.error, rounds.error, matchesRes.error, tournamentInstances.error, drawSlotsRes.error, providerSyncRuns.error, manualOverrides.error, poolRoundScoringRes.error].forEach(throwIfError);
 
   const matches = matchesRes.data ?? [];
   const drawSlots = drawSlotsRes.data ?? [];
@@ -482,6 +498,7 @@ export async function getAppStateForPoolFromSupabase(poolId: string): Promise<Ap
     liveScoreSnapshots: [],
     tournamentInstances: (tournamentInstances.data ?? []).map(mapTournamentInstance),
     poolTournaments: (poolTournamentRows ?? []).map(mapPoolTournament),
+    poolRoundScoring: (poolRoundScoringRes.data ?? []).map(mapPoolRoundScoring),
     drawSlots: drawSlots.map(mapDrawSlot),
     providerSyncRuns: (providerSyncRuns.data ?? []).map(mapProviderSyncRun),
     manualOverrides: (manualOverrides.data ?? []).map(mapManualOverride),
@@ -542,6 +559,7 @@ export async function getAppStateForUserFromSupabase(userId: string): Promise<Ap
     liveScoreSnapshots: [],
     tournamentInstances: [],
     poolTournaments: poolTournamentData.map(mapPoolTournament),
+    poolRoundScoring: [],
     drawSlots: [],
     providerSyncRuns: [],
     manualOverrides: [],
@@ -825,6 +843,23 @@ export async function isTournamentPickingClosedInSupabase(tournamentId: string):
   return !Number.isNaN(deadline) && Date.now() >= deadline;
 }
 
+/**
+ * Per-pool picking-closed (server): this pool's own early lock, OR the shared Slam
+ * having started. Used to freeze a pool's own scoring + lock controls once its
+ * picks are closed. A pool with no started/locked tournament is open.
+ */
+export async function isPoolPickingClosedInSupabase(poolId: string): Promise<boolean> {
+  const supabase = getClient();
+  const { data: pts } = await supabase.from("pool_tournaments").select("tournament_id, locked_at").eq("pool_id", poolId);
+  const rows = pts ?? [];
+  if (rows.length === 0) return false;
+  for (const pt of rows) {
+    const closed = pt.locked_at != null || (await isTournamentPickingClosedInSupabase(pt.tournament_id));
+    if (!closed) return false; // an open tournament exists for this pool
+  }
+  return true;
+}
+
 export async function updateTournamentScoringInSupabase(input: {
   tournamentId: string;
   rounds: Array<{ roundNumber: number; pointsPerCorrectPick: number }>;
@@ -844,6 +879,36 @@ export async function updateTournamentScoringInSupabase(input: {
 
   // Points changed → re-score all picks in this tournament.
   return recalculateTournamentScoresInSupabase(input.tournamentId);
+}
+
+/**
+ * Per-pool scoring overrides. Upserts one row per round for this pool only — other
+ * pools on the same Slam are untouched. Scoring is read live on the leaderboard
+ * and bracket board, so no stored re-score is needed (and it's blocked after a
+ * pool's picks lock, before any results exist anyway).
+ */
+export async function setPoolRoundScoringInSupabase(input: {
+  poolId: string;
+  rounds: Array<{ roundNumber: number; pointsPerCorrectPick: number }>;
+}) {
+  const supabase = getClient();
+  const rows = input.rounds.map((round) => ({
+    pool_id: input.poolId,
+    round_number: round.roundNumber,
+    points_per_correct_pick: round.pointsPerCorrectPick
+  }));
+  const { error } = await supabase.from("pool_round_scoring").upsert(rows, { onConflict: "pool_id,round_number" });
+  throwIfError(error);
+  return { updated: rows.length };
+}
+
+/** Per-pool early lock/unlock of picking (the pool's own pool_tournaments.locked_at). */
+export async function setPoolPickingLockInSupabase(input: { poolId: string; locked: boolean }) {
+  const supabase = getClient();
+  const lockedAt = input.locked ? new Date().toISOString() : null;
+  const { error } = await supabase.from("pool_tournaments").update({ locked_at: lockedAt }).eq("pool_id", input.poolId);
+  throwIfError(error);
+  return { lockedAt };
 }
 
 async function getOrCreateProfileByEmail(supabase: SupabaseClient, input: { email: string; displayName: string }) {

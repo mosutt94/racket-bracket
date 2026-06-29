@@ -8,7 +8,7 @@ import { PageLoading } from "@/components/PageLoading";
 import { PoolNav } from "@/components/PoolNav";
 import { getLeaderboard } from "@/lib/services/scoring-service";
 import { getCachedAppState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
-import { findTournamentForPool, isPickingClosed } from "@/lib/state-helpers";
+import { findTournamentForPool, isPoolPickingClosed } from "@/lib/state-helpers";
 import { useAutoSync } from "@/lib/use-auto-sync";
 import type { AppState } from "@/lib/types";
 
@@ -39,7 +39,7 @@ export default function LeaderboardPage({ params }: { params: { poolId: string }
   const championIds = new Set(champions.map((champion) => champion.userId));
   // Other members' brackets open up once picking closes (anti-copy) — and a
   // concluded tournament is closed by definition, regardless of the flag.
-  const pickingClosed = concluded || isPickingClosed(tournament);
+  const pickingClosed = concluded || isPoolPickingClosed(state, params.poolId);
   const hasBracket = (userId: string) =>
     state.brackets.some((item) => item.poolId === params.poolId && item.tournamentId === tournament.id && item.userId === userId);
   const rowBase = "grid items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0";

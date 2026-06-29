@@ -1,5 +1,6 @@
 import type { AppState, Bracket, BracketPick, ScoreEvent } from "@/lib/types";
 import { makeId } from "@/lib/utils";
+import { effectivePoolRounds } from "@/lib/state-helpers";
 
 export function recalculateScores(state: AppState, tournamentId: string): AppState {
   const tournamentMatches = state.matches.filter((match) => match.tournamentId === tournamentId);
@@ -65,10 +66,9 @@ export function getLeaderboard(state: AppState, poolId: string, tournamentId: st
   const members = state.poolMembers.filter((member) => member.poolId === poolId);
   const tournamentMatches = state.matches.filter((match) => match.tournamentId === tournamentId);
   const matchById = new Map(tournamentMatches.map((match) => [match.id, match]));
+  // This pool's effective points (its overrides, else the shared tournament_rounds).
   const roundPoints = new Map(
-    state.rounds
-      .filter((round) => round.tournamentId === tournamentId)
-      .map((round) => [round.roundNumber, round.pointsPerCorrectPick])
+    effectivePoolRounds(state, poolId, tournamentId).map((round) => [round.roundNumber, round.pointsPerCorrectPick])
   );
   // Players out of the draw (lost a completed match) — their picks can't score.
   const eliminated = new Set<string>();
