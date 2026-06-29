@@ -49,7 +49,9 @@ export default function InviteJoinPage({ params }: { params: { inviteCode: strin
 
       const saved = getSavedCurrentUser();
       if (!saved) {
-        if (!cancelled) setPhase("email");
+        // Picking closed → show the closed screen up front (it has a "sign in to
+        // your bracket" path for returning members). Otherwise, the email step.
+        if (!cancelled) setPhase(nextPreview.pickingClosed ? "closed" : "email");
         return;
       }
 
