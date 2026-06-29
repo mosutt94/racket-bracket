@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isSupabaseConfigured, isTournamentPickingClosedInSupabase, setPlayerDesignationInSupabase } from "@/lib/supabase/persistence";
-import { requireCommissionerForTournament } from "@/lib/auth/guard";
+import { requireSiteOwner } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Label must be Q, WC, LL, or PR." }, { status: 400 });
   }
 
-  const guard = await requireCommissionerForTournament(tournamentId);
+  const guard = await requireSiteOwner(tournamentId);
   if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
 
   // Labels are shared across every pool on this Slam, so freeze them once play

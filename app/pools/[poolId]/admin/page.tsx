@@ -62,6 +62,11 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   // undefined = not checked yet. Re-auth prompt (for a password-protected
   // commissioner whose session isn't established on this device/browser).
   const [sessionUserId, setSessionUserId] = useState<string | null | undefined>(undefined);
+  // Site owner = may manage the shared tournament (import/tags/sync/corrections).
+  // ownerConfigured=false means SITE_ADMIN_EMAILS isn't set yet → fall back to
+  // commissioner access so the tools don't vanish before an owner is designated.
+  const [siteOwner, setSiteOwner] = useState(false);
+  const [ownerConfigured, setOwnerConfigured] = useState(false);
   const [reauthPw, setReauthPw] = useState("");
   const [reauthBusy, setReauthBusy] = useState(false);
   const [reauthError, setReauthError] = useState<string | null>(null);
@@ -75,7 +80,11 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
     loadAppState(params.poolId).then(setState);
     fetch("/api/auth/commissioner-status")
       .then((r) => r.json())
-      .then((d) => setSessionUserId(d.userId ?? null))
+      .then((d) => {
+        setSessionUserId(d.userId ?? null);
+        setSiteOwner(Boolean(d.isSiteOwner));
+        setOwnerConfigured(Boolean(d.ownerConfigured));
+      })
       .catch(() => setSessionUserId(null));
   }, [params.poolId]);
 
@@ -99,6 +108,10 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   const me = getCurrentUserForState(state);
   // Co-commissioners (members promoted to the "commissioner" role) get full powers.
   const isCommissioner = isPoolCommissioner(state, params.poolId);
+  // Shared-tournament tools (draw import, tags, results sync, corrections) belong
+  // to the site owner. Until an owner is configured, commissioners keep access so
+  // nothing disappears. (The server enforces the same rule.)
+  const canManageShared = ownerConfigured ? siteOwner : isCommissioner;
   const hasPassword = Boolean(me.hasPassword);
   const roleOf = (userId: string) =>
     userId === activePool.commissionerUserId
@@ -513,6 +526,8 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
           </div>
         </section>
         <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_1fr]">
+          {canManageShared ? (
+          <>
           <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm lg:col-span-2">
             <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
               <div>
@@ -586,6 +601,8 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
               ) : null}
             </div>
           </section>
+          </>
+          ) : null}
           <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-black">Bracket tools</h2>
             <div className="mt-3 flex items-center gap-2 text-sm font-semibold text-slate-600">
@@ -627,6 +644,8 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
               </p>
             ) : null}
           </section>
+          {canManageShared ? (
+          <>
           <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-black">Bracket corrections</h2>
             <p className="mt-1 text-sm text-slate-600">
@@ -645,6 +664,8 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
               Edit Q / WC labels
             </Link>
           </section>
+          </>
+          ) : null}
           <section className="rounded-xl border border-court-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-black">Submission tracker</h2>
             <p className="mt-1 text-sm text-slate-600">Promote a member to co-commissioner for full admin access, clear a bracket to reset their picks, or remove them entirely.</p>

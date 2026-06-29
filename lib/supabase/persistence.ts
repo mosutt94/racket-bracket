@@ -764,6 +764,13 @@ export async function findProfileByEmail(email: string) {
   return data ? mapProfile(data) : null;
 }
 
+/** The email for a profile id, or null. Used to match against the site-owner list. */
+export async function getProfileEmailById(userId: string): Promise<string | null> {
+  const { data, error } = await getClient().from("profiles").select("email").eq("id", userId).maybeSingle();
+  throwIfError(error);
+  return data?.email ?? null;
+}
+
 export async function setTournamentStatusInSupabase(input: {
   tournamentId: string;
   status: TournamentStatus;

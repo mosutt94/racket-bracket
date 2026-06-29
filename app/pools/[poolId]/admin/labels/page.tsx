@@ -18,9 +18,15 @@ export default function PlayerLabelsPage({ params }: { params: { poolId: string 
   const [overrides, setOverrides] = useState<Record<string, string | null>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Tags are a shared-tournament action → site-owner only (once configured).
+  const [owner, setOwner] = useState<{ configured: boolean; isOwner: boolean }>({ configured: false, isOwner: false });
 
   useEffect(() => {
     loadAppState(params.poolId).then(setState);
+    fetch("/api/auth/commissioner-status")
+      .then((r) => r.json())
+      .then((d) => setOwner({ configured: Boolean(d.ownerConfigured), isOwner: Boolean(d.isSiteOwner) }))
+      .catch(() => {});
   }, [params.poolId]);
 
   const tournament = state ? findTournamentForPool(state, params.poolId) : undefined;
@@ -42,6 +48,21 @@ export default function PlayerLabelsPage({ params }: { params: { poolId: string 
 
   if (!state) return <PageLoading />;
   if (!tournament) return null;
+
+  // Once an owner is configured, only they manage shared tags (server enforces it).
+  if (owner.configured && !owner.isOwner) {
+    return (
+      <AppFrame compact slam={tournament.slamType}>
+        <main className="mx-auto max-w-3xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
+          <PoolNav poolId={params.poolId} showAccount isCommissioner={isPoolCommissioner(state, params.poolId)} />
+          <div className="mt-6 rounded-xl border border-court-200 bg-white p-6 shadow-sm">
+            <h1 className="text-2xl font-black text-ink">Player labels</h1>
+            <p className="mt-2 text-sm text-slate-600">Q / WC labels are managed by the site owner. Ask them to add or change a player&apos;s tag.</p>
+          </div>
+        </main>
+      </AppFrame>
+    );
+  }
 
   // Labels are shared per-Slam; freeze them once play begins (server enforces it
   // too). They're meant to be set before the tournament starts.

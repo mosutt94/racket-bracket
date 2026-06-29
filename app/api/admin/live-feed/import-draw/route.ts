@@ -9,7 +9,7 @@ import {
   refreshDrawSeedsInSupabase,
   tournamentHasPicksInSupabase
 } from "@/lib/supabase/persistence";
-import { requireCommissionerForTournament } from "@/lib/auth/guard";
+import { requireSiteOwner } from "@/lib/auth/guard";
 import type { Gender, SlamType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   }
 
   // Destructive (can reset existing picks) — gate firmly to the commissioner.
-  const guard = await requireCommissionerForTournament(tournamentId);
+  const guard = await requireSiteOwner(tournamentId);
   if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
 
   // Draw import touches the shared per-Slam tournament. Freeze it entirely once

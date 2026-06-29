@@ -17,9 +17,15 @@ export default function MatchManagementPage({ params }: { params: { poolId: stri
   const [drafts, setDrafts] = useState<Drafts>({});
   const [busyMatchId, setBusyMatchId] = useState<string | null>(null);
   const [matchMessage, setMatchMessage] = useState<{ id: string; ok: boolean; text: string } | null>(null);
+  // Corrections are a shared-tournament action → site-owner only (once configured).
+  const [owner, setOwner] = useState<{ configured: boolean; isOwner: boolean }>({ configured: false, isOwner: false });
 
   useEffect(() => {
     loadAppState(params.poolId).then(setState);
+    fetch("/api/auth/commissioner-status")
+      .then((r) => r.json())
+      .then((d) => setOwner({ configured: Boolean(d.ownerConfigured), isOwner: Boolean(d.isSiteOwner) }))
+      .catch(() => {});
   }, [params.poolId]);
 
   const tournament = state ? findTournamentForPool(state, params.poolId) : undefined;
@@ -51,6 +57,21 @@ export default function MatchManagementPage({ params }: { params: { poolId: stri
   }, [matches, playerById, state, tournament]);
 
   if (!state || !tournament) return <PageLoading />;
+
+  // Once an owner is configured, only they manage shared corrections (server enforces it).
+  if (owner.configured && !owner.isOwner) {
+    return (
+      <AppFrame compact slam={tournament.slamType}>
+        <main className="mx-auto max-w-5xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
+          <PoolNav poolId={params.poolId} showAccount isCommissioner={isPoolCommissioner(state, params.poolId)} />
+          <div className="mt-6 rounded-xl border border-court-200 bg-white p-6 shadow-sm">
+            <h1 className="text-2xl font-black text-ink">Bracket corrections</h1>
+            <p className="mt-2 text-sm text-slate-600">Match results and corrections are managed by the site owner.</p>
+          </div>
+        </main>
+      </AppFrame>
+    );
+  }
   const activeTournament = tournament;
 
   const visibleMatches = matches.filter((match) => match.roundNumber === roundFilter);

@@ -6,7 +6,7 @@ import {
   recordManualMatchUpdate,
   recordManualPlayerSlotUpdate
 } from "@/lib/supabase/persistence";
-import { requireCommissionerForTournament } from "@/lib/auth/guard";
+import { requireSiteOwner } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
 
   // Only the commissioner of a pool in this draw may edit matches. The acting
   // user is taken from the verified cookie, never trusted from the request body.
-  const guard = await requireCommissionerForTournament(tournamentId);
+  const guard = await requireSiteOwner(tournamentId);
   if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
   const createdByUserId = guard.userId;
 
