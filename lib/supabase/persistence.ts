@@ -300,7 +300,9 @@ export async function getAppStateFromSupabase(): Promise<AppState> {
     supabase.from("tournament_rounds").select("*").range(0, 9999),
     supabase.from("players").select("*").range(0, 9999),
     // matches can exceed PostgREST's 1000-row cap (~8 pools × 127 matches), so page.
-    fetchAllRows((from, to) => supabase.from("matches").select("*").range(from, to)).then((data) => ({ data, error: null })),
+    // Order by id (unique) so paged .range() reads are stable — without it pages
+    // overlap/skip rows nondeterministically once there's more than one page.
+    fetchAllRows((from, to) => supabase.from("matches").select("*").order("id", { ascending: true }).range(from, to)).then((data) => ({ data, error: null })),
     supabase.from("tournament_instances").select("*").range(0, 9999),
     supabase.from("pool_tournaments").select("*").range(0, 9999),
     supabase.from("draw_slots").select("*").range(0, 9999),
@@ -1252,15 +1254,21 @@ export async function getBracketBundle(input: { poolId?: string | null; tourname
     if (input.poolId) query = query.eq("pool_id", input.poolId);
     if (input.tournamentId) query = query.eq("tournament_id", input.tournamentId);
     if (input.userId) query = query.eq("user_id", input.userId);
-    return query.order("submitted_at", { ascending: false, nullsFirst: false }).range(from, to);
+    // Order by id (unique) as the final tiebreaker: paging with .range() needs a
+    // STABLE total order or pages overlap/skip rows nondeterministically once the
+    // result exceeds one page. submitted_at alone has ties/nulls, so it isn't stable.
+    return query.order("submitted_at", { ascending: false, nullsFirst: false }).order("id", { ascending: true }).range(from, to);
   });
 
   const bracketIds = brackets.map((row: any) => row.id);
   if (bracketIds.length === 0) return { brackets: [], picks: [] };
 
   // bracket_picks can exceed PostgREST's 1000-row cap (8+ pools × 127 picks), so page.
+  // MUST order by a unique column — without it, paged .range() reads return
+  // duplicated/missing rows nondeterministically, which double-counted picks and
+  // inflated leaderboard scores once a pool passed ~1000 total picks.
   const picks = await fetchAllRows((from, to) =>
-    supabase.from("bracket_picks").select("*").in("bracket_id", bracketIds).range(from, to)
+    supabase.from("bracket_picks").select("*").order("id", { ascending: true }).in("bracket_id", bracketIds).range(from, to)
   );
 
   return {
