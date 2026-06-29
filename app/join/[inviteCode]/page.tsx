@@ -234,13 +234,19 @@ export default function InviteJoinPage({ params }: { params: { inviteCode: strin
                 Picks locked when the tournament began, so this bracket isn&apos;t taking new entries.
               </p>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                Already filled one out? Open it from your brackets — just sign in with the same email you used.
+                Already made a bracket? Sign in with the email you used and you&apos;ll go straight to it.
               </p>
-              <a
-                href="/dashboard"
+              <button
+                onClick={useDifferentEmail}
                 className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-court-700 px-4 py-3 font-bold text-white hover:bg-court-900"
               >
-                Go to my brackets <ArrowRight size={18} />
+                Sign in to your bracket <ArrowRight size={18} />
+              </button>
+              <a
+                href="/dashboard"
+                className="mt-3 block w-full text-center text-sm font-semibold text-slate-500 hover:text-court-700"
+              >
+                Go to my brackets
               </a>
             </>
           ) : phase === "signed-in" ? (
