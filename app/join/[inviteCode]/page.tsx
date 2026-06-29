@@ -9,8 +9,8 @@ import { PasswordField } from "@/components/PasswordField";
 import { loadDashboardState } from "@/lib/app-state-client";
 import { clearCurrentUser, getSavedCurrentUser, saveCurrentUser } from "@/lib/current-user";
 
-type Preview = { poolId: string; poolName: string; commissionerName: string | null };
-type Phase = "checking" | "invalid" | "signed-in" | "email" | "password" | "name";
+type Preview = { poolId: string; poolName: string; commissionerName: string | null; pickingClosed: boolean };
+type Phase = "checking" | "invalid" | "closed" | "signed-in" | "email" | "password" | "name";
 
 export default function InviteJoinPage({ params }: { params: { inviteCode: string } }) {
   const router = useRouter();
@@ -40,7 +40,7 @@ export default function InviteJoinPage({ params }: { params: { inviteCode: strin
           setPhase("invalid");
           return;
         }
-        nextPreview = { poolId: data.poolId, poolName: data.poolName, commissionerName: data.commissionerName ?? null };
+        nextPreview = { poolId: data.poolId, poolName: data.poolName, commissionerName: data.commissionerName ?? null, pickingClosed: Boolean(data.pickingClosed) };
         setPreview(nextPreview);
       } catch {
         if (!cancelled) setPhase("invalid");
@@ -64,6 +64,12 @@ export default function InviteJoinPage({ params }: { params: { inviteCode: strin
         // Membership check failed — fall through to the one-tap join card.
       }
       if (cancelled) return;
+      // Signed in but not a member, and picking has closed — no point offering a
+      // join button that would just fail. (Returning members already redirected.)
+      if (nextPreview.pickingClosed) {
+        setPhase("closed");
+        return;
+      }
       setCurrentName(saved.displayName);
       setPhase("signed-in");
     })();
@@ -79,6 +85,12 @@ export default function InviteJoinPage({ params }: { params: { inviteCode: strin
       body: JSON.stringify({ inviteCode, userId })
     });
     const data = await response.json();
+    // Latecomer after picks locked — show the friendly closed screen, not an error.
+    if (data.closed) {
+      setBusy(false);
+      setPhase("closed");
+      return;
+    }
     if (!response.ok || !data.ok || !data.pool) throw new Error(data.error ?? "Could not join bracket.");
     router.replace(`/pools/${data.pool.id}/my-bracket`);
   }
@@ -127,7 +139,8 @@ export default function InviteJoinPage({ params }: { params: { inviteCode: strin
         return;
       }
       setBusy(false);
-      setPhase("name");
+      // Brand-new email after picks locked — block before asking for a name.
+      setPhase(preview?.pickingClosed ? "closed" : "name");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not continue.");
       setBusy(false);
@@ -212,6 +225,23 @@ export default function InviteJoinPage({ params }: { params: { inviteCode: strin
               <p className="mt-2 text-sm leading-6 text-slate-600">
                 Double-check the link, or ask whoever invited you to send a fresh one.
               </p>
+            </>
+          ) : phase === "closed" ? (
+            <>
+              <p className="text-sm font-black uppercase tracking-wide text-clay-700">Picking closed</p>
+              <h1 className="mt-2 text-2xl font-black text-ink sm:text-3xl">{preview?.poolName} has already started</h1>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Picks locked when the tournament began, so this bracket isn&apos;t taking new entries.
+              </p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Already filled one out? Open it from your brackets — just sign in with the same email you used.
+              </p>
+              <a
+                href="/dashboard"
+                className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-court-700 px-4 py-3 font-bold text-white hover:bg-court-900"
+              >
+                Go to my brackets <ArrowRight size={18} />
+              </a>
             </>
           ) : phase === "signed-in" ? (
             <>

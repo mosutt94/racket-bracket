@@ -1123,6 +1123,27 @@ function getFreshPickingDeadline(templateDeadline?: string | null) {
   return twoDaysFromNow.toISOString();
 }
 
+/**
+ * Whether a pool is closed to NEW members: every tournament it's attached to has
+ * picking closed (commissioner locked the status, or the auto-lock picking
+ * deadline has passed). Existing members are never gated by this — the invite
+ * link doubles as their login, so they must always be let back in. Returns false
+ * when no tournament is attached yet (nothing to lock).
+ */
+async function isPoolJoinClosed(poolId: string): Promise<boolean> {
+  const supabase = getClient();
+  const { data: pts } = await supabase.from("pool_tournaments").select("tournament_id").eq("pool_id", poolId);
+  const tournamentIds = (pts ?? []).map((row: any) => row.tournament_id).filter(Boolean);
+  if (tournamentIds.length === 0) return false;
+  const { data: tours } = await supabase.from("tournaments").select("status, picking_deadline").in("id", tournamentIds);
+  const list = tours ?? [];
+  if (list.length === 0) return false;
+  const now = Date.now();
+  const closed = (t: any) =>
+    t.status !== "picking_open" || (t.picking_deadline != null && now >= new Date(t.picking_deadline).getTime());
+  return list.every(closed);
+}
+
 export async function joinPool(input: { inviteCode: string; userId: string }) {
   const supabase = getClient();
   const code = input.inviteCode.trim().toUpperCase();
@@ -1130,6 +1151,18 @@ export async function joinPool(input: { inviteCode: string; userId: string }) {
   const { data: pool, error: poolError } = await supabase.from("pools").select("*").eq("invite_code", code).maybeSingle();
   throwIfError(poolError);
   if (!pool) return null;
+
+  // Returning members always get back in (the link is their login). Only block a
+  // brand-new join once picking has closed for the Slam.
+  const { data: existing } = await supabase
+    .from("pool_members")
+    .select("id")
+    .eq("pool_id", pool.id)
+    .eq("user_id", input.userId)
+    .maybeSingle();
+  if (!existing && (await isPoolJoinClosed(pool.id))) {
+    return { closed: true as const, pool: mapPool(pool) };
+  }
 
   const { data: membership, error: membershipError } = await supabase
     .from("pool_members")
@@ -1162,6 +1195,22 @@ export async function joinPoolByEmail(input: { inviteCode: string; email: string
 
   const { data: existingProfile, error: profileLookupError } = await supabase.from("profiles").select("*").eq("email", email).maybeSingle();
   throwIfError(profileLookupError);
+
+  // Returning members get back in; block only brand-new joins once picking closes.
+  // Check before creating any profile/membership so a latecomer leaves no trace.
+  let alreadyMember = false;
+  if (existingProfile) {
+    const { data: mem } = await supabase
+      .from("pool_members")
+      .select("id")
+      .eq("pool_id", pool.id)
+      .eq("user_id", existingProfile.id)
+      .maybeSingle();
+    alreadyMember = Boolean(mem);
+  }
+  if (!alreadyMember && (await isPoolJoinClosed(pool.id))) {
+    return { closed: true as const, pool: mapPool(pool) };
+  }
 
   let profile = existingProfile;
 
@@ -1242,7 +1291,7 @@ export async function getInvitePreviewInSupabase(inviteCode: string) {
     commissionerName = profile?.display_name ?? null;
   }
 
-  return { poolId: pool.id, poolName: pool.name, commissionerName };
+  return { poolId: pool.id, poolName: pool.name, commissionerName, pickingClosed: await isPoolJoinClosed(pool.id) };
 }
 
 export async function getBracketBundle(input: { poolId?: string | null; tournamentId?: string | null; userId?: string | null }) {

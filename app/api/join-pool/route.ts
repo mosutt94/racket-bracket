@@ -22,6 +22,12 @@ export async function POST(request: Request) {
         ? await joinPool({ inviteCode, userId })
         : null;
     if (!result) return NextResponse.json({ ok: false, error: "Invite code not found" }, { status: 404 });
+    if ("closed" in result && result.closed) {
+      return NextResponse.json(
+        { ok: false, closed: true, error: "Picking has closed for this bracket — the tournament has already started." },
+        { status: 403 }
+      );
+    }
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     return NextResponse.json(
