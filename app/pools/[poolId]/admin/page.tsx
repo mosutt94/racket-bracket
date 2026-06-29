@@ -556,24 +556,27 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
                   Pull the first-round matchups and the player seeds from ESPN. Safe to run anytime — once people have picked, this only refreshes the seeds (ESPN adds them shortly after the draw) and never touches anyone&apos;s picks.
                 </p>
               </div>
+              {/* Draw import touches the shared per-Slam tournament and is only
+                  useful during setup, so both buttons disappear once play starts
+                  (the server enforces this too). */}
               <div className="grid gap-2 md:min-w-[220px]">
-                <button onClick={() => importDraw(false)} disabled={importBusy} className="rounded-lg bg-ink px-4 py-3 font-bold text-white disabled:bg-slate-300">
-                  {importBusy ? "Importing..." : "Import draw / refresh seeds"}
-                </button>
-                {/* Clearing all picks wipes every pool on this Slam — only ever
-                    available before play starts; the server enforces this too. */}
                 {tournamentStarted ? (
                   <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-500">
-                    🔒 Re-importing the draw is locked once the tournament has started.
+                    🔒 Draw import is locked once the tournament has started.
                   </p>
                 ) : (
-                  <button
-                    onClick={confirmResetImport}
-                    disabled={importBusy}
-                    className="rounded-lg border border-clay-300 px-4 py-2 text-sm font-bold text-clay-700 transition hover:bg-clay-100 disabled:opacity-50"
-                  >
-                    Re-import &amp; clear all picks
-                  </button>
+                  <>
+                    <button onClick={() => importDraw(false)} disabled={importBusy} className="rounded-lg bg-ink px-4 py-3 font-bold text-white disabled:bg-slate-300">
+                      {importBusy ? "Importing..." : "Import draw / refresh seeds"}
+                    </button>
+                    <button
+                      onClick={confirmResetImport}
+                      disabled={importBusy}
+                      className="rounded-lg border border-clay-300 px-4 py-2 text-sm font-bold text-clay-700 transition hover:bg-clay-100 disabled:opacity-50"
+                    >
+                      Re-import &amp; clear all picks
+                    </button>
+                  </>
                 )}
               </div>
               {importStatus ? (

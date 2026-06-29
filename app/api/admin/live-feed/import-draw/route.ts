@@ -35,12 +35,12 @@ export async function POST(request: Request) {
   const guard = await requireCommissionerForTournament(tournamentId);
   if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
 
-  // Clearing all picks wipes every pool on this shared Slam. Never allow it once
-  // play has begun — that would nuke a live tournament for everyone. (The safe,
-  // pick-preserving seed refresh below stays available.)
-  if (resetExistingPicks && (await isTournamentPickingClosedInSupabase(tournamentId))) {
+  // Draw import touches the shared per-Slam tournament. Freeze it entirely once
+  // play has begun: the destructive clear-all would nuke a live tournament for
+  // everyone, and the safe seed refresh is pointless after the draw is set.
+  if (await isTournamentPickingClosedInSupabase(tournamentId)) {
     return NextResponse.json(
-      { ok: false, error: "Clearing all picks is locked once the tournament has started." },
+      { ok: false, error: "Draw import is locked once the tournament has started." },
       { status: 403 }
     );
   }
