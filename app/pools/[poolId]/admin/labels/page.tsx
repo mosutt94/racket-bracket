@@ -6,7 +6,7 @@ import { AppFrame } from "@/components/AppFrame";
 import { PageLoading } from "@/components/PageLoading";
 import { PoolNav } from "@/components/PoolNav";
 import { getCachedAppState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
-import { findTournamentForPool } from "@/lib/state-helpers";
+import { findTournamentForPool, isPickingClosed } from "@/lib/state-helpers";
 import type { AppState } from "@/lib/types";
 
 const LABELS = ["Q", "WC", "LL", "PR"];
@@ -42,6 +42,10 @@ export default function PlayerLabelsPage({ params }: { params: { poolId: string 
 
   if (!state) return <PageLoading />;
   if (!tournament) return null;
+
+  // Labels are shared per-Slam; freeze them once play begins (server enforces it
+  // too). They're meant to be set before the tournament starts.
+  const tournamentStarted = isPickingClosed(tournament);
 
   const labelOf = (playerId: string, fallback: string | null | undefined) =>
     Object.prototype.hasOwnProperty.call(overrides, playerId) ? overrides[playerId] : fallback ?? null;
@@ -80,6 +84,11 @@ export default function PlayerLabelsPage({ params }: { params: { poolId: string 
             where the seed number goes. Seeded players already show their seed and don&apos;t need a label.
           </p>
           <p className="mt-1 text-xs font-semibold text-slate-500">{labeledCount} labelled · {players.length} players</p>
+          {tournamentStarted ? (
+            <p className="mt-3 rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600">
+              🔒 Labels are locked because the tournament has started. They can&apos;t be changed once play is underway.
+            </p>
+          ) : null}
         </div>
 
         <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
@@ -118,7 +127,7 @@ export default function PlayerLabelsPage({ params }: { params: { poolId: string 
                           <button
                             key={label}
                             onClick={() => setLabel(player.id, active ? null : label)}
-                            disabled={busyId === player.id}
+                            disabled={busyId === player.id || tournamentStarted}
                             className={
                               active
                                 ? "rounded-md border border-court-700 bg-court-700 px-2.5 py-1 text-xs font-black text-white disabled:opacity-50"
@@ -132,7 +141,7 @@ export default function PlayerLabelsPage({ params }: { params: { poolId: string 
                       {current ? (
                         <button
                           onClick={() => setLabel(player.id, null)}
-                          disabled={busyId === player.id}
+                          disabled={busyId === player.id || tournamentStarted}
                           className="rounded-md px-2 py-1 text-xs font-bold text-clay-700 hover:bg-clay-100 disabled:opacity-50"
                         >
                           Clear

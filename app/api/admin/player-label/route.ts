@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isSupabaseConfigured, setPlayerDesignationInSupabase } from "@/lib/supabase/persistence";
+import { isSupabaseConfigured, isTournamentPickingClosedInSupabase, setPlayerDesignationInSupabase } from "@/lib/supabase/persistence";
 import { requireCommissionerForTournament } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +24,15 @@ export async function POST(request: Request) {
 
   const guard = await requireCommissionerForTournament(tournamentId);
   if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+
+  // Labels are shared across every pool on this Slam, so freeze them once play
+  // begins — they're set before the tournament and shouldn't shift mid-event.
+  if (await isTournamentPickingClosedInSupabase(tournamentId)) {
+    return NextResponse.json(
+      { ok: false, error: "Player labels are locked once the tournament has started." },
+      { status: 403 }
+    );
+  }
 
   try {
     await setPlayerDesignationInSupabase({ playerId, designation: value });
