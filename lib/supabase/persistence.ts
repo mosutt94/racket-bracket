@@ -1857,9 +1857,22 @@ export async function syncEspnLiveUpdatesInSupabase(input: {
       .filter((match) => match.eventType === eventType)
       .map((match) => [normalizeEspnMatchId(match.providerMatchId), match])
   );
+  // Resolve provider player ids only against the players THIS tournament's
+  // matches reference. Player rows are duplicated per import/Slam and share the
+  // same external_provider_id, so a global map collapses to an arbitrary row —
+  // which then fails the "winner must be one of this match's players" guard and
+  // leaves finished matches stuck (needsReview). Scoping to this tournament's
+  // own player rows makes the provider id → player id mapping unambiguous.
+  const tournamentMatches = state.matches.filter((item) => item.tournamentId === input.tournamentId);
+  const tournamentPlayerIds = new Set<string>();
+  for (const item of tournamentMatches) {
+    if (item.player1Id) tournamentPlayerIds.add(item.player1Id);
+    if (item.player2Id) tournamentPlayerIds.add(item.player2Id);
+    if (item.winnerPlayerId) tournamentPlayerIds.add(item.winnerPlayerId);
+  }
   const playerByProviderId = new Map(
     state.players
-      .filter((player) => player.externalProviderId)
+      .filter((player) => player.externalProviderId && tournamentPlayerIds.has(player.id))
       .map((player) => [normalizeEspnPlayerId(player.externalProviderId ?? ""), player.id])
   );
   const lockedMatchIds = await getLockedManualMatchIds(input.tournamentId);
