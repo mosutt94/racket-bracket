@@ -602,9 +602,23 @@ export class EspnTennisProvider {
     const competitors = [...(competition.competitors ?? [])].sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
     const player1 = competitors[0];
     const player2 = competitors[1];
-    const winner = competitors.find((competitor) => competitor.winner);
+    let winner = competitors.find((competitor) => competitor.winner);
     const baseStatus = this.mapStatus(competition, competitors);
-    const status = competitors.length === 2 ? baseStatus : "needs_review";
+    let status = competitors.length === 2 ? baseStatus : "needs_review";
+
+    // ESPN often finalizes a match in its result NOTE ("X bt Y …") before the
+    // structured status/winner flips — common for retirements, where the status
+    // can even still read "Scheduled". Trust the note as a winner signal when
+    // there's no structured winner yet, so finished matches don't stay stuck.
+    // This is re-derived every sync, so once ESPN's clean structured result
+    // arrives the normal path takes over (and corrects it if it ever differs).
+    if (!winner && status !== "completed" && competitors.length === 2) {
+      const noteWinner = this.resolveNoteWinner(competition, player1, player2);
+      if (noteWinner) {
+        winner = noteWinner;
+        status = "completed";
+      }
+    }
 
     return {
       providerMatchId: competition.id,
@@ -691,6 +705,28 @@ export class EspnTennisProvider {
 
   private getPlayerName(competitor?: EspnCompetitor) {
     return competitor?.athlete?.displayName ?? competitor?.athlete?.fullName ?? competitor?.athlete?.shortName ?? null;
+  }
+
+  // Parse ESPN's result note ("(28) Brandon Nakashima (USA) bt Jack Pinnington
+  // Jones (GBR) 6-3 7-6 4-3") to find the winner. Returns a competitor only when
+  // the split is unambiguous: exactly one player's name sits before the decisive
+  // verb (bt / def.) and the other sits after. Anything ambiguous returns null so
+  // the match is left untouched rather than risk a wrong winner.
+  private resolveNoteWinner(competition: EspnCompetition, player1?: EspnCompetitor, player2?: EspnCompetitor): EspnCompetitor | null {
+    if (!player1 || !player2) return null;
+    const note = competition.notes?.find((item) => item.text)?.text;
+    if (!note) return null;
+    const lower = note.toLowerCase();
+    const verb = lower.match(/\s(?:bt|def\.?)\s/);
+    if (!verb || verb.index === undefined) return null;
+    const before = lower.slice(0, verb.index);
+    const after = lower.slice(verb.index + verb[0].length);
+    const name1 = this.getPlayerName(player1)?.toLowerCase();
+    const name2 = this.getPlayerName(player2)?.toLowerCase();
+    if (!name1 || !name2) return null;
+    if (before.includes(name1) && !after.includes(name1) && after.includes(name2) && !before.includes(name2)) return player1;
+    if (before.includes(name2) && !after.includes(name2) && after.includes(name1) && !before.includes(name1)) return player2;
+    return null;
   }
 
   private getEventType(tour: EspnTour, competition: EspnCompetition): ProviderMatch["eventType"] {
