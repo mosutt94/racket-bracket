@@ -153,6 +153,8 @@ interface EspnBracketCompetitor {
   name: string;
   seed?: string;
   logo?: string;
+  winner?: boolean;
+  scores?: Array<{ v?: string; p?: number; w?: boolean }>;
 }
 
 interface EspnBracketMatchup {
@@ -163,6 +165,11 @@ interface EspnBracketMatchup {
   bracketLocation: number;
   roundId: number;
   date?: string;
+  // ESPN's bracket payload carries the authoritative per-match result even after
+  // the live scoreboard drops finished matches at the end of a day's play.
+  // statusState: "pre" | "in" | "post"; statusDesc: e.g. "Final", "Scheduled".
+  statusState?: string;
+  statusDesc?: string;
 }
 
 interface EspnBracketPayload {
@@ -260,6 +267,12 @@ export interface EspnDrawMatchLink {
   matchNumber: number;
   providerMatchId: string;
   startTime?: string | null;
+  // Authoritative result carried by the bracket payload. Used as a fallback to
+  // finalize matches ESPN has dropped from the live scoreboard (e.g. once a
+  // day's play ends). statusState === "post" means the match is final.
+  statusState?: string | null;
+  winnerProviderId?: string | null;
+  scoreSummary?: string | null;
 }
 
 const baseUrl = "https://site.api.espn.com/apis/site/v2/sports/tennis";
@@ -451,12 +464,22 @@ export class EspnTennisProvider {
     return {
       links: bracket.matchups
         .filter((matchup: EspnBracketMatchup) => matchup.roundId >= 1 && matchup.roundId <= 7)
-        .map((matchup: EspnBracketMatchup) => ({
-          roundNumber: matchup.roundId,
-          matchNumber: matchup.bracketLocation,
-          providerMatchId: this.makeProviderMatchId(matchup.matchupId ?? matchup.id),
-          startTime: matchup.date ?? null
-        })),
+        .map((matchup: EspnBracketMatchup) => {
+          const winner = matchup.competitorOne?.winner
+            ? matchup.competitorOne
+            : matchup.competitorTwo?.winner
+              ? matchup.competitorTwo
+              : null;
+          return {
+            roundNumber: matchup.roundId,
+            matchNumber: matchup.bracketLocation,
+            providerMatchId: this.makeProviderMatchId(matchup.matchupId ?? matchup.id),
+            startTime: matchup.date ?? null,
+            statusState: matchup.statusState ?? null,
+            winnerProviderId: winner?.id ? this.makeProviderPlayerId(winner.id) : null,
+            scoreSummary: this.summarizeBracketMatchup(matchup)
+          };
+        }),
       rawPayload: bracket
     };
   }
@@ -622,6 +645,29 @@ export class EspnTennisProvider {
     if (status?.state === "in" || text.includes("in progress")) return "live";
     if (status?.state === "pre") return "scheduled";
     return "scheduled";
+  }
+
+  // Build a final-score line from the bracket payload, e.g. "N. Borges def.
+  // T. Boyer 6-3 7-5 7-5". Used only for matches finalized via the bracket
+  // fallback (the live scoreboard provides its own running summary).
+  private summarizeBracketMatchup(matchup: EspnBracketMatchup): string | null {
+    const one = matchup.competitorOne;
+    const two = matchup.competitorTwo;
+    if (!one || !two) return null;
+    const sets = (one.scores ?? []).map((set, index) => {
+      const a = set?.v ?? "";
+      const b = two.scores?.[index]?.v ?? "";
+      return a === "" && b === "" ? "" : `${a}-${b}`;
+    }).filter(Boolean);
+    if (sets.length === 0) return null;
+    const winner = one.winner ? one : two.winner ? two : null;
+    const loser = winner === one ? two : winner === two ? one : null;
+    // Order the set scores from the winner's perspective when we know it.
+    const ordered = winner === two
+      ? sets.map((pair) => pair.split("-").reverse().join("-"))
+      : sets;
+    if (winner && loser) return `${winner.name} def. ${loser.name} ${ordered.join(" ")}`;
+    return `${one.name} ${sets.join(" ")} ${two.name}`;
   }
 
   private getScoreSummary(competition: EspnCompetition, player1?: EspnCompetitor, player2?: EspnCompetitor) {

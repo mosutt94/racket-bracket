@@ -1868,6 +1868,7 @@ export async function syncEspnLiveUpdatesInSupabase(input: {
   let matchesAdvanced = 0;
   let skippedManualOverrides = 0;
   let needsReview = 0;
+  const finalizedThisSync = new Set<string>();
 
   for (const match of state.matches.filter((item) => item.tournamentId === input.tournamentId)) {
     const providerMatch = providerMatchById.get(normalizeEspnMatchId(match.externalProviderMatchId ?? ""));
@@ -1895,7 +1896,10 @@ export async function syncEspnLiveUpdatesInSupabase(input: {
       .eq("id", match.id);
     throwIfError(error);
     matchesUpdated += 1;
-    if (result.winnerPlayerId && result.status === "completed") winnersApplied += 1;
+    if (result.winnerPlayerId && result.status === "completed") {
+      winnersApplied += 1;
+      finalizedThisSync.add(match.id);
+    }
 
     if (result.winnerPlayerId && match.nextMatchId && match.nextMatchSlot) {
       const nextPlayerColumn = match.nextMatchSlot === "player1" ? "player1_id" : "player2_id";
@@ -1905,6 +1909,67 @@ export async function syncEspnLiveUpdatesInSupabase(input: {
         .update({
           [nextPlayerColumn]: result.winnerPlayerId,
           [nextDrawSlotColumn]: result.winnerDrawSlotId,
+          updated_at: now
+        })
+        .eq("id", match.nextMatchId);
+      throwIfError(advanceError);
+      matchesAdvanced += 1;
+    }
+  }
+
+  // Fallback finalization from the bracket payload. ESPN's live scoreboard drops
+  // finished matches once a day's play ends, which leaves matches frozen mid-set
+  // with no winner. The bracket payload retains the authoritative Final result,
+  // so apply it here for any match the scoreboard pass left unfinished. This is
+  // strictly additive: it only sets winners on matches that don't already have
+  // one, never overrides an existing or manually-locked result.
+  const bracketResultByProviderId = new Map(
+    drawLinks.links
+      .filter((link) => link.statusState === "post" && link.winnerProviderId)
+      .map((link) => [normalizeEspnMatchId(link.providerMatchId), link])
+  );
+  let bracketFinalsApplied = 0;
+  for (const match of state.matches.filter((item) => item.tournamentId === input.tournamentId)) {
+    if (match.winnerPlayerId) continue; // already final — never override
+    if (finalizedThisSync.has(match.id)) continue; // scoreboard pass just finalized it
+    if (lockedMatchIds.has(match.id)) {
+      skippedManualOverrides += 1;
+      continue;
+    }
+    const link = bracketResultByProviderId.get(normalizeEspnMatchId(match.externalProviderMatchId ?? ""));
+    if (!link?.winnerProviderId) continue;
+    const winnerPlayerId = playerByProviderId.get(normalizeEspnPlayerId(link.winnerProviderId)) ?? null;
+    // Only finalize when the winner resolves to one of this match's two players;
+    // anything ambiguous is left untouched for manual review.
+    if (!winnerPlayerId || (winnerPlayerId !== match.player1Id && winnerPlayerId !== match.player2Id)) {
+      needsReview += 1;
+      continue;
+    }
+    const winnerDrawSlotId =
+      winnerPlayerId === match.player1Id ? match.player1DrawSlotId ?? null : match.player2DrawSlotId ?? null;
+
+    const { error } = await supabase
+      .from("matches")
+      .update({
+        status: "completed",
+        score_summary: link.scoreSummary ?? match.scoreSummary ?? null,
+        winner_player_id: winnerPlayerId,
+        winner_draw_slot_id: winnerDrawSlotId,
+        updated_at: now
+      })
+      .eq("id", match.id);
+    throwIfError(error);
+    bracketFinalsApplied += 1;
+    winnersApplied += 1;
+
+    if (match.nextMatchId && match.nextMatchSlot) {
+      const nextPlayerColumn = match.nextMatchSlot === "player1" ? "player1_id" : "player2_id";
+      const nextDrawSlotColumn = match.nextMatchSlot === "player1" ? "player1_draw_slot_id" : "player2_draw_slot_id";
+      const { error: advanceError } = await supabase
+        .from("matches")
+        .update({
+          [nextPlayerColumn]: winnerPlayerId,
+          [nextDrawSlotColumn]: winnerDrawSlotId,
           updated_at: now
         })
         .eq("id", match.nextMatchId);
@@ -1960,6 +2025,7 @@ export async function syncEspnLiveUpdatesInSupabase(input: {
     matchesUpdated,
     winnersApplied,
     matchesAdvanced,
+    bracketFinalsApplied,
     skippedManualOverrides,
     needsReview,
     scoring
