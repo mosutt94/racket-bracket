@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getBracketBundle, isSupabaseConfigured, saveBracket } from "@/lib/supabase/persistence";
+import { getBracketBundle, isPoolTournamentPickingClosedInSupabase, isSupabaseConfigured, saveBracket } from "@/lib/supabase/persistence";
 
 export async function GET(request: Request) {
   if (!isSupabaseConfigured()) {
@@ -31,6 +31,17 @@ export async function POST(request: Request) {
 
   if (!poolId || !tournamentId || !userId) {
     return NextResponse.json({ ok: false, error: "poolId, tournamentId, and userId are required." }, { status: 400 });
+  }
+
+  // Once picking is closed for this pool's Slam, picks are frozen for everyone —
+  // enforced here on the server, not just hidden in the UI. This blocks editing a
+  // bracket (draft or locked) after the tournament starts / the pool locks, so a
+  // crafted request can't rewrite picks against already-decided matches.
+  if (await isPoolTournamentPickingClosedInSupabase(poolId, tournamentId)) {
+    return NextResponse.json(
+      { ok: false, error: "Picking is closed for this bracket — picks can no longer be changed." },
+      { status: 403 }
+    );
   }
 
   try {

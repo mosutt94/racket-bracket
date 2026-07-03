@@ -844,6 +844,24 @@ export async function isTournamentPickingClosedInSupabase(tournamentId: string):
 }
 
 /**
+ * Picking-closed for one specific (pool, tournament): the pool's own early lock
+ * on that Slam, OR the shared Slam having started / passed its deadline. This is
+ * the precise per-entry check (unlike isPoolPickingClosedInSupabase, which folds
+ * across every Slam a pool plays). Used to reject pick edits after lock.
+ */
+export async function isPoolTournamentPickingClosedInSupabase(poolId: string, tournamentId: string): Promise<boolean> {
+  const supabase = getClient();
+  const { data } = await supabase
+    .from("pool_tournaments")
+    .select("locked_at")
+    .eq("pool_id", poolId)
+    .eq("tournament_id", tournamentId)
+    .maybeSingle();
+  if (data?.locked_at != null) return true;
+  return isTournamentPickingClosedInSupabase(tournamentId);
+}
+
+/**
  * Per-pool picking-closed (server): this pool's own early lock, OR the shared Slam
  * having started. Used to freeze a pool's own scoring + lock controls once its
  * picks are closed. A pool with no started/locked tournament is open.
