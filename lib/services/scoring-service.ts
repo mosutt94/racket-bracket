@@ -1,6 +1,6 @@
 import type { AppState, Bracket, BracketPick, ScoreEvent } from "@/lib/types";
 import { makeId } from "@/lib/utils";
-import { effectivePoolRounds } from "@/lib/state-helpers";
+import { effectivePoolRounds, isPoolPickingClosed } from "@/lib/state-helpers";
 
 export function recalculateScores(state: AppState, tournamentId: string): AppState {
   const tournamentMatches = state.matches.filter((match) => match.tournamentId === tournamentId);
@@ -64,6 +64,10 @@ export function recalculateScores(state: AppState, tournamentId: string): AppSta
 
 export function getLeaderboard(state: AppState, poolId: string, tournamentId: string) {
   const members = state.poolMembers.filter((member) => member.poolId === poolId);
+  // Once the pool's picking is closed everyone's bracket is frozen, so it reads as
+  // "Locked" — even a bracket left in draft (picks filled but never manually
+  // submitted). Before close, only a bracket the player froze themselves is locked.
+  const pickingClosed = isPoolPickingClosed(state, poolId);
   const tournamentMatches = state.matches.filter((match) => match.tournamentId === tournamentId);
   const matchById = new Map(tournamentMatches.map((match) => [match.id, match]));
   // This pool's effective points (its overrides, else the shared tournament_rounds).
@@ -128,8 +132,9 @@ export function getLeaderboard(state: AppState, poolId: string, tournamentId: st
         // pick). Mirrors the admin tracker so both pages agree on "Not started"
         // vs "Incomplete".
         started: Boolean(bracket),
-        // Locked = the player froze their bracket (old "submitted" counts as locked).
-        locked: bracket?.status === "locked" || bracket?.status === "submitted",
+        // Locked = picks are frozen: either the pool's picking has closed (freezes
+        // everyone, including drafts) or the player froze their own bracket.
+        locked: Boolean(bracket) && (pickingClosed || bracket?.status === "locked" || bracket?.status === "submitted"),
         bracketStatus: bracket?.status ?? "draft"
       };
     })
