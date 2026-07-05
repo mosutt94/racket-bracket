@@ -19,6 +19,8 @@ export default function LeaderboardPage({ params }: { params: { poolId: string }
   }, [params.poolId]);
   const tournament = state ? findTournamentForPool(state, params.poolId) : undefined;
   useAutoSync(tournament, {
+    staleMinutes: 1,
+    intervalMs: 60_000,
     onSynced: async () => setState(await loadAppState(params.poolId))
   });
 

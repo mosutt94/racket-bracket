@@ -14,9 +14,13 @@ import type { Tournament } from "@/lib/types";
  */
 export function useAutoSync(
   tournament: Pick<Tournament, "id" | "tournamentInstanceId"> | undefined | null,
-  options: { staleMinutes?: number; onSynced?: () => void | Promise<void> } = {}
+  options: { staleMinutes?: number; intervalMs?: number; onSynced?: () => void | Promise<void> } = {}
 ) {
   const staleMinutes = options.staleMinutes ?? 10;
+  // When set, keep re-checking on this cadence so a viewer watching a live match
+  // sees scores/statuses update without navigating. The server call is
+  // stale-gated (ifStaleMinutes), so repeated ticks are cheap no-ops when fresh.
+  const intervalMs = options.intervalMs ?? 0;
 
   useEffect(() => {
     if (!tournament?.id || !tournament.tournamentInstanceId) return;
@@ -47,12 +51,14 @@ export function useAutoSync(
     }
 
     run();
+    const timer = intervalMs > 0 ? setInterval(run, intervalMs) : undefined;
     return () => {
       cancelled = true;
+      if (timer) clearInterval(timer);
     };
     // Intentional dep list: re-run only when the tournament identity changes,
     // not on every render of the parent (which would happen if we depended on
     // the full `tournament` object since its reference changes per render).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tournament?.id, tournament?.tournamentInstanceId, staleMinutes]);
+  }, [tournament?.id, tournament?.tournamentInstanceId, staleMinutes, intervalMs]);
 }
