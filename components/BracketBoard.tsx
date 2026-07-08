@@ -314,12 +314,14 @@ export function BracketBoard({
     const liveScore = displaysRealMatch ? liveScores?.[match.id] : undefined;
     const providerScore = liveScore ? formatLiveScore(liveScore) : null;
 
-    // Status chip uses the live score if we have one, otherwise the stored match status.
-    const matchStatusForChip: ProviderMatchStatus | null = liveScore
-      ? liveScore.status
-      : displaysRealMatch
-        ? (match.status === "completed" ? "completed" : match.status === "live" ? "live" : "scheduled")
-        : null;
+    // The status chip reflects the REAL match at this slot — has it been played? —
+    // independent of whether your projected players are the ones actually in it.
+    // Otherwise a decided slot you mispredicted (both your picks eliminated) would
+    // wrongly read "Upcoming". The detailed score line stays gated to the real
+    // matchup above, so a score is never shown under the wrong players.
+    const realLiveStatus = liveScores?.[match.id]?.status;
+    const matchStatusForChip: ProviderMatchStatus =
+      realLiveStatus ?? (match.status === "completed" ? "completed" : match.status === "live" ? "live" : "scheduled");
 
     return (
       <article
