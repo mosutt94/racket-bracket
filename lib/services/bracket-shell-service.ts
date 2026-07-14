@@ -115,10 +115,14 @@ export function getSlamCalendarDefaults(slamType: SlamType, year: number): SlamC
         finalStartsAt: utcIso(year, 7, 13, 9)
       };
     case "us_open":
+      // Anchored to the 2026 edition per ESPN's published schedule: qualifying
+      // Aug 25, main draw Mon Aug 31 (R1) through the Sun Sep 13 final.
+      // mainDrawStartsAt doubles as the picking auto-lock, so 10:00 UTC = 6am
+      // ET — hours before day-1 play begins. Touch up per year if dates shift.
       return {
-        qualifyingStartsAt: utcIso(year, 8, 18, 10),
-        mainDrawStartsAt: utcIso(year, 8, 25, 10),
-        finalStartsAt: utcIso(year, 9, 7, 9)
+        qualifyingStartsAt: utcIso(year, 8, 25, 10),
+        mainDrawStartsAt: utcIso(year, 8, 31, 10),
+        finalStartsAt: utcIso(year, 9, 13, 9)
       };
   }
 }

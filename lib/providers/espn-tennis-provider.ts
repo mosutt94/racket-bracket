@@ -79,7 +79,9 @@ const espnGrandSlamConfigs: Record<SlamType, EspnGrandSlamConfig> = {
     espnSlug: "us-open",
     espnTournamentId: "560",
     aliases: ["us open", "u.s. open"],
-    dateRange: (year) => `${year}0824-${year}0907`,
+    // 2026 edition: qualifying starts Aug 25, final is Sun Sep 13 — the range
+    // spans the full event so second-week scoreboard fetches aren't cut off.
+    dateRange: (year) => `${year}0824-${year}0914`,
     expectedFirstRoundSinglesMatches: 64,
     expectedTotalSinglesMatches: 127,
     menCompetitionType: "1",
