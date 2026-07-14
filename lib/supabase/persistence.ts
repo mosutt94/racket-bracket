@@ -384,29 +384,46 @@ function mapProviderRow(row: any) {
 export async function getAppStateForPoolFromSupabase(poolId: string): Promise<AppState> {
   const supabase = getClient();
 
-  const { data: poolTournamentRows, error: ptError } = await supabase
-    .from("pool_tournaments")
-    .select("*")
-    .eq("pool_id", poolId);
-  throwIfError(ptError);
+  // Cheap scoping wave first: the pool row, its members, and its tournament
+  // links — everything else (including which profiles to ship) keys off these.
+  const [poolTournamentsRes, poolsRes, poolMembersRes] = await Promise.all([
+    supabase.from("pool_tournaments").select("*").eq("pool_id", poolId),
+    supabase.from("pools").select("*").eq("id", poolId),
+    supabase.from("pool_members").select("*").eq("pool_id", poolId)
+  ]);
+  [poolTournamentsRes.error, poolsRes.error, poolMembersRes.error].forEach(throwIfError);
+  const poolTournamentRows = poolTournamentsRes.data ?? [];
+  const poolRows = poolsRes.data ?? [];
+  const poolMemberRows = poolMembersRes.data ?? [];
+
+  // Profiles scoped to this pool's people (members + commissioner). Pool pages
+  // only ever render pool members; fetching every profile both silently capped
+  // the app at 10,000 users (.range truncation) and shipped every user's email
+  // to every client. Non-member visitors fall back to their localStorage
+  // profile in getCurrentUserForState, which already handles absence.
+  const profileIds = Array.from(new Set(
+    [...poolMemberRows.map((row: any) => row.user_id), ...poolRows.map((row: any) => row.commissioner_user_id)].filter(Boolean)
+  ));
+  const fetchProfiles = async (): Promise<{ data: any[] | null; error: any }> =>
+    profileIds.length
+      ? await supabase.from("profiles").select("*").in("id", profileIds)
+      : { data: [], error: null };
 
   const tournamentIds = Array.from(new Set((poolTournamentRows ?? []).map((row: any) => row.tournament_id).filter(Boolean)));
   const instanceIds = Array.from(new Set((poolTournamentRows ?? []).map((row: any) => row.tournament_instance_id).filter(Boolean)));
 
   // No tournament attached yet (degenerate) — return a minimal but valid state.
   if (tournamentIds.length === 0) {
-    const [profiles, pools, poolMembers, tennisDataProviders, bracketBundle] = await Promise.all([
-      supabase.from("profiles").select("*").range(0, 9999),
-      supabase.from("pools").select("*").eq("id", poolId),
-      supabase.from("pool_members").select("*").eq("pool_id", poolId),
+    const [profiles, tennisDataProviders, bracketBundle] = await Promise.all([
+      fetchProfiles(),
       supabase.from("tennis_data_providers").select("*").range(0, 9999),
       getBracketBundle({ poolId })
     ]);
-    [profiles.error, pools.error, poolMembers.error, tennisDataProviders.error].forEach(throwIfError);
+    [profiles.error, tennisDataProviders.error].forEach(throwIfError);
     return {
       profiles: (profiles.data ?? []).map(mapProfile),
-      pools: (pools.data ?? []).map(mapPool),
-      poolMembers: (poolMembers.data ?? []).map(mapPoolMember),
+      pools: poolRows.map(mapPool),
+      poolMembers: poolMemberRows.map(mapPoolMember),
       tournaments: [],
       rounds: [],
       players: [],
@@ -431,8 +448,6 @@ export async function getAppStateForPoolFromSupabase(poolId: string): Promise<Ap
   // discovered from the matches + draw slots.
   const [
     profiles,
-    pools,
-    poolMembers,
     tennisDataProviders,
     tournaments,
     rounds,
@@ -444,9 +459,7 @@ export async function getAppStateForPoolFromSupabase(poolId: string): Promise<Ap
     bracketBundle,
     poolRoundScoringRes
   ] = await Promise.all([
-    supabase.from("profiles").select("*").range(0, 9999),
-    supabase.from("pools").select("*").eq("id", poolId),
-    supabase.from("pool_members").select("*").eq("pool_id", poolId),
+    fetchProfiles(),
     supabase.from("tennis_data_providers").select("*").range(0, 9999),
     supabase.from("tournaments").select("*").in("id", tournamentIds),
     supabase.from("tournament_rounds").select("*").in("tournament_id", tournamentIds),
@@ -462,7 +475,7 @@ export async function getAppStateForPoolFromSupabase(poolId: string): Promise<Ap
     getBracketBundle({ poolId }),
     supabase.from("pool_round_scoring").select("*").eq("pool_id", poolId)
   ]);
-  [profiles.error, pools.error, poolMembers.error, tennisDataProviders.error, tournaments.error, rounds.error, matchesRes.error, tournamentInstances.error, drawSlotsRes.error, providerSyncRuns.error, manualOverrides.error, poolRoundScoringRes.error].forEach(throwIfError);
+  [profiles.error, tennisDataProviders.error, tournaments.error, rounds.error, matchesRes.error, tournamentInstances.error, drawSlotsRes.error, providerSyncRuns.error, manualOverrides.error, poolRoundScoringRes.error].forEach(throwIfError);
 
   const matches = matchesRes.data ?? [];
   const drawSlots = drawSlotsRes.data ?? [];
@@ -486,8 +499,8 @@ export async function getAppStateForPoolFromSupabase(poolId: string): Promise<Ap
 
   return {
     profiles: (profiles.data ?? []).map(mapProfile),
-    pools: (pools.data ?? []).map(mapPool),
-    poolMembers: (poolMembers.data ?? []).map(mapPoolMember),
+    pools: poolRows.map(mapPool),
+    poolMembers: poolMemberRows.map(mapPoolMember),
     tournaments: (tournaments.data ?? []).map(mapTournament),
     rounds: (rounds.data ?? []).map(mapRound),
     players: players.map(mapPlayer),
@@ -517,8 +530,10 @@ export async function getAppStateForUserFromSupabase(userId: string): Promise<Ap
   const { data: memberRows, error: memberError } = await supabase.from("pool_members").select("*").eq("user_id", userId);
   throwIfError(memberError);
 
+  // The dashboard only renders the signed-in user's own name/email
+  // (getCurrentUserForState), so ship just that one profile.
   const [profiles, tennisDataProviders] = await Promise.all([
-    supabase.from("profiles").select("*").range(0, 9999),
+    supabase.from("profiles").select("*").eq("id", userId),
     supabase.from("tennis_data_providers").select("*").range(0, 9999)
   ]);
   [profiles.error, tennisDataProviders.error].forEach(throwIfError);
