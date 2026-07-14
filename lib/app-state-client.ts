@@ -1,7 +1,7 @@
 "use client";
 
 import { getSavedCurrentUser } from "@/lib/current-user";
-import type { AppState, Profile } from "@/lib/types";
+import type { AppState, Match, Profile, Tournament } from "@/lib/types";
 
 // Last successfully-loaded state, kept in memory for the SPA session so pages
 // can seed their initial render and avoid a blank flash on navigation. Keyed by
@@ -49,6 +49,50 @@ export async function loadAppState(poolId?: string): Promise<AppState> {
   if (poolId) cachedPoolState.set(poolId, state);
   else cachedFullState = state;
   return state;
+}
+
+/**
+ * Cheap live refresh for a pool page: pulls only the matches changed since the
+ * cached state's updated_at watermark (plus the tournament row) and merges them
+ * into the cached state — a few KB per poll instead of re-downloading the full
+ * pool state every minute for every viewer. Falls back to a full load when
+ * nothing is cached yet; returns the cached state unchanged when nothing moved.
+ */
+export async function refreshTournamentMatches(poolId: string): Promise<AppState> {
+  const cached = cachedPoolState.get(poolId);
+  if (!cached) return loadAppState(poolId);
+  const poolTournament = cached.poolTournaments.find((item) => item.poolId === poolId);
+  if (!poolTournament) return cached;
+  const tournamentId = poolTournament.tournamentId;
+
+  let since: string | null = null;
+  for (const match of cached.matches) {
+    if (match.tournamentId !== tournamentId || !match.updatedAt) continue;
+    if (!since || match.updatedAt > since) since = match.updatedAt;
+  }
+
+  const url = `/api/live-matches?tournamentId=${encodeURIComponent(tournamentId)}${since ? `&since=${encodeURIComponent(since)}` : ""}`;
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) return cached;
+  const result = (await response.json()) as { ok: boolean; matches?: Match[]; tournament?: Tournament | null };
+  if (!result.ok) return cached;
+
+  const updated = result.matches ?? [];
+  const cachedTournament = cached.tournaments.find((item) => item.id === tournamentId);
+  const tournamentChanged =
+    Boolean(result.tournament) && JSON.stringify(result.tournament) !== JSON.stringify(cachedTournament);
+  if (updated.length === 0 && !tournamentChanged) return cached;
+
+  const updatedById = new Map(updated.map((match) => [match.id, match]));
+  const next: AppState = {
+    ...cached,
+    matches: cached.matches.map((match) => updatedById.get(match.id) ?? match),
+    tournaments: tournamentChanged
+      ? cached.tournaments.map((item) => (item.id === tournamentId ? (result.tournament as Tournament) : item))
+      : cached.tournaments
+  };
+  cachedPoolState.set(poolId, next);
+  return next;
 }
 
 /**

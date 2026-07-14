@@ -470,7 +470,10 @@ export async function getAppStateForPoolFromSupabase(poolId: string): Promise<Ap
     instanceIds.length
       ? supabase.from("draw_slots").select("*").in("tournament_instance_id", instanceIds)
       : supabase.from("draw_slots").select("*").in("tournament_instance_id", tournamentIds),
-    supabase.from("provider_sync_runs").select("*").in("tournament_id", tournamentIds).order("started_at", { ascending: false }),
+    // Only the newest few runs — the admin page shows the latest sync line, but
+    // this table grows by one row per sync (thousands over a live Slam) and was
+    // being shipped in full on every pool page load.
+    supabase.from("provider_sync_runs").select("*").in("tournament_id", tournamentIds).order("started_at", { ascending: false }).limit(20),
     supabase.from("manual_overrides").select("*").in("tournament_id", tournamentIds).order("created_at", { ascending: false }),
     getBracketBundle({ poolId }),
     supabase.from("pool_round_scoring").select("*").eq("pool_id", poolId)
@@ -1657,18 +1660,74 @@ export async function clearManualOverridesForMatchInSupabase(input: { matchId: s
   return { overridesUnlocked: data?.length ?? 0 };
 }
 
+/**
+ * Lightweight live-refresh payload: the tournament row plus only the matches
+ * changed since `since` (an updated_at watermark from the client's cached
+ * state). During live play this is a few KB per poll instead of re-shipping
+ * the full pool state (~1.5 MB) to every viewer every minute. Relies on the
+ * sync writing matches only when values actually change.
+ */
+export async function getLiveMatchesDelta(tournamentId: string, since?: string | null) {
+  const supabase = getClient();
+  let matchesQuery = supabase.from("matches").select("*").eq("tournament_id", tournamentId);
+  if (since) matchesQuery = matchesQuery.gt("updated_at", since);
+  const [matchesRes, tournamentRes] = await Promise.all([
+    matchesQuery,
+    supabase.from("tournaments").select("*").eq("id", tournamentId).maybeSingle()
+  ]);
+  [matchesRes.error, tournamentRes.error].forEach(throwIfError);
+  return {
+    matches: (matchesRes.data ?? []).map(mapMatch),
+    tournament: tournamentRes.data ? mapTournament(tournamentRes.data) : null
+  };
+}
+
 export async function recalculateTournamentScoresInSupabase(tournamentId: string) {
   const supabase = getClient();
-  const state = await getAppStateFromSupabase();
+  // Targeted load: the pure recalculation needs this tournament's matches,
+  // rounds, brackets, and picks. It used to pull the ENTIRE app state and then
+  // rewrite every pick and bracket wholesale on every sync — now it loads one
+  // tournament's slice and writes only the rows whose values actually moved.
+  const [matchesRes, roundsRes, bundle] = await Promise.all([
+    supabase.from("matches").select("*").eq("tournament_id", tournamentId),
+    supabase.from("tournament_rounds").select("*").eq("tournament_id", tournamentId),
+    getBracketBundle({ tournamentId })
+  ]);
+  [matchesRes.error, roundsRes.error].forEach(throwIfError);
+  if (bundle.brackets.length === 0) return { bracketsScored: 0, picksScored: 0 };
+
+  const state: AppState = {
+    profiles: [],
+    pools: [],
+    poolMembers: [],
+    tournaments: [],
+    rounds: (roundsRes.data ?? []).map(mapRound),
+    players: [],
+    matches: (matchesRes.data ?? []).map(mapMatch),
+    brackets: bundle.brackets,
+    bracketPicks: bundle.picks,
+    scoreEvents: [],
+    liveScoreSnapshots: [],
+    tournamentInstances: [],
+    poolTournaments: [],
+    poolRoundScoring: [],
+    drawSlots: [],
+    providerSyncRuns: [],
+    manualOverrides: [],
+    tennisDataProviders: []
+  };
   const rescored = recalculateScores(state, tournamentId);
-  const bracketIds = rescored.brackets.filter((bracket) => bracket.tournamentId === tournamentId).map((bracket) => bracket.id);
 
-  if (bracketIds.length === 0) return { bracketsScored: 0, picksScored: 0 };
-
-  const picks = rescored.bracketPicks.filter((pick) => bracketIds.includes(pick.bracketId));
-  if (picks.length > 0) {
+  const pickBefore = new Map(bundle.picks.map((pick) => [pick.id, pick]));
+  const changedPicks = rescored.bracketPicks.filter((pick) => {
+    const before = pickBefore.get(pick.id);
+    return !before
+      || (before.isCorrect ?? null) !== (pick.isCorrect ?? null)
+      || (before.pointsAwarded ?? 0) !== (pick.pointsAwarded ?? 0);
+  });
+  if (changedPicks.length > 0) {
     const { error: picksError } = await supabase.from("bracket_picks").upsert(
-      picks.map((pick) => ({
+      changedPicks.map((pick) => ({
         id: pick.id,
         bracket_id: pick.bracketId,
         match_id: pick.matchId,
@@ -1681,23 +1740,28 @@ export async function recalculateTournamentScoresInSupabase(tournamentId: string
     throwIfError(picksError);
   }
 
-  const brackets = rescored.brackets.filter((bracket) => bracket.tournamentId === tournamentId);
-  const { error: bracketsError } = await supabase.from("brackets").upsert(
-    brackets.map((bracket) => ({
-      id: bracket.id,
-      pool_id: bracket.poolId,
-      tournament_id: bracket.tournamentId,
-      user_id: bracket.userId,
-      submitted_at: bracket.submittedAt,
-      locked_at: bracket.lockedAt,
-      total_score: bracket.totalScore,
-      status: bracket.status
-    })),
-    { onConflict: "pool_id,tournament_id,user_id" }
+  const bracketBefore = new Map(bundle.brackets.map((bracket) => [bracket.id, bracket]));
+  const changedBrackets = rescored.brackets.filter(
+    (bracket) => bracket.tournamentId === tournamentId && (bracketBefore.get(bracket.id)?.totalScore ?? 0) !== bracket.totalScore
   );
-  throwIfError(bracketsError);
+  if (changedBrackets.length > 0) {
+    const { error: bracketsError } = await supabase.from("brackets").upsert(
+      changedBrackets.map((bracket) => ({
+        id: bracket.id,
+        pool_id: bracket.poolId,
+        tournament_id: bracket.tournamentId,
+        user_id: bracket.userId,
+        submitted_at: bracket.submittedAt,
+        locked_at: bracket.lockedAt,
+        total_score: bracket.totalScore,
+        status: bracket.status
+      })),
+      { onConflict: "pool_id,tournament_id,user_id" }
+    );
+    throwIfError(bracketsError);
+  }
 
-  return { bracketsScored: brackets.length, picksScored: picks.length };
+  return { bracketsScored: changedBrackets.length, picksScored: changedPicks.length };
 }
 
 /**
@@ -1818,9 +1882,55 @@ export async function syncEspnLiveUpdatesInSupabase(input: {
     }
   }
 
-  const state = await getAppStateFromSupabase();
-  const tournament = state.tournaments.find((item) => item.id === input.tournamentId);
-  if (!tournament) throw new Error("Tournament not found.");
+  // Targeted load — the sync needs this tournament's row, its matches, and the
+  // players those matches reference, nothing more. It used to pull the ENTIRE
+  // app state (every pool's brackets and picks) once a minute during live play,
+  // which single-handedly blew the free-tier database egress quota.
+  const { data: tournamentRow, error: tournamentError } = await supabase
+    .from("tournaments")
+    .select("*")
+    .eq("id", input.tournamentId)
+    .maybeSingle();
+  throwIfError(tournamentError);
+  if (!tournamentRow) throw new Error("Tournament not found.");
+  const tournament = mapTournament(tournamentRow);
+
+  // A concluded Slam never changes again — skip the ESPN fetch and the whole
+  // write pass instead of re-syncing a finished draw on every page visit.
+  if (tournament.status === "completed") {
+    return { skipped: true as const, reason: "completed", lastSyncedAt: tournamentRow.last_synced_at ?? null, ageMinutes: null };
+  }
+
+  const { data: matchRows, error: matchesError } = await supabase
+    .from("matches")
+    .select("*")
+    .eq("tournament_id", input.tournamentId);
+  throwIfError(matchesError);
+  const tournamentMatches = (matchRows ?? []).map(mapMatch);
+  const matchById = new Map(tournamentMatches.map((match) => [match.id, match]));
+
+  // Resolve provider player ids only against the players THIS tournament's
+  // matches reference. Player rows are duplicated per import/Slam and share the
+  // same external_provider_id, so a broader map collapses to an arbitrary row —
+  // which then fails the "winner must be one of this match's players" guard and
+  // leaves finished matches stuck (needsReview).
+  const tournamentPlayerIds = new Set<string>();
+  for (const item of tournamentMatches) {
+    if (item.player1Id) tournamentPlayerIds.add(item.player1Id);
+    if (item.player2Id) tournamentPlayerIds.add(item.player2Id);
+    if (item.winnerPlayerId) tournamentPlayerIds.add(item.winnerPlayerId);
+  }
+  const playerByProviderId = new Map<string, string>();
+  if (tournamentPlayerIds.size > 0) {
+    const { data: playerRows, error: playersError } = await supabase
+      .from("players")
+      .select("id, external_provider_id")
+      .in("id", Array.from(tournamentPlayerIds));
+    throwIfError(playersError);
+    for (const row of playerRows ?? []) {
+      if (row.external_provider_id) playerByProviderId.set(normalizeEspnPlayerId(row.external_provider_id), row.id);
+    }
+  }
 
   const provider = new EspnTennisProvider();
   const [drawLinks, providerMatches] = await Promise.all([
@@ -1835,32 +1945,29 @@ export async function syncEspnLiveUpdatesInSupabase(input: {
     })
   ]);
 
-  const rawSnapshotId = await recordLiveScoreSnapshot({
-    tournamentId: input.tournamentId,
-    providerName: "EspnTennisProvider",
-    rawPayload: {
-      drawLinks: drawLinks.rawPayload,
-      matchUpdates: providerMatches.map((match) => ({
-        providerMatchId: normalizeEspnMatchId(match.providerMatchId),
-        providerEventId: match.providerEventId ?? null,
-        eventType: match.eventType,
-        status: match.status,
-        roundName: match.roundName ?? null,
-        player1Name: match.player1Name ?? null,
-        player1ProviderId: match.player1ProviderId ?? null,
-        player2Name: match.player2Name ?? null,
-        player2ProviderId: match.player2ProviderId ?? null,
-        scoreSummary: match.scoreSummary ?? null,
-        winnerName: match.winnerName ?? null,
-        winnerProviderId: match.winnerProviderId ?? null
-      }))
-    }
-  });
+  // Snapshot payload is built now but recorded only if this sync actually
+  // changes something — the raw payload is ~300 KB, and recording it every
+  // minute was the main driver of database-size growth.
+  const snapshotPayload = {
+    drawLinks: drawLinks.rawPayload,
+    matchUpdates: providerMatches.map((match) => ({
+      providerMatchId: normalizeEspnMatchId(match.providerMatchId),
+      providerEventId: match.providerEventId ?? null,
+      eventType: match.eventType,
+      status: match.status,
+      roundName: match.roundName ?? null,
+      player1Name: match.player1Name ?? null,
+      player1ProviderId: match.player1ProviderId ?? null,
+      player2Name: match.player2Name ?? null,
+      player2ProviderId: match.player2ProviderId ?? null,
+      scoreSummary: match.scoreSummary ?? null,
+      winnerName: match.winnerName ?? null,
+      winnerProviderId: match.winnerProviderId ?? null
+    }))
+  };
 
   const matchesByRoundAndNumber = new Map(
-    state.matches
-      .filter((match) => match.tournamentId === input.tournamentId)
-      .map((match) => [`${match.roundNumber}:${match.matchNumber}`, match])
+    tournamentMatches.map((match) => [`${match.roundNumber}:${match.matchNumber}`, match])
   );
   let matchLinksUpdated = 0;
   const now = new Date().toISOString();
@@ -1890,24 +1997,6 @@ export async function syncEspnLiveUpdatesInSupabase(input: {
       .filter((match) => match.eventType === eventType)
       .map((match) => [normalizeEspnMatchId(match.providerMatchId), match])
   );
-  // Resolve provider player ids only against the players THIS tournament's
-  // matches reference. Player rows are duplicated per import/Slam and share the
-  // same external_provider_id, so a global map collapses to an arbitrary row —
-  // which then fails the "winner must be one of this match's players" guard and
-  // leaves finished matches stuck (needsReview). Scoping to this tournament's
-  // own player rows makes the provider id → player id mapping unambiguous.
-  const tournamentMatches = state.matches.filter((item) => item.tournamentId === input.tournamentId);
-  const tournamentPlayerIds = new Set<string>();
-  for (const item of tournamentMatches) {
-    if (item.player1Id) tournamentPlayerIds.add(item.player1Id);
-    if (item.player2Id) tournamentPlayerIds.add(item.player2Id);
-    if (item.winnerPlayerId) tournamentPlayerIds.add(item.winnerPlayerId);
-  }
-  const playerByProviderId = new Map(
-    state.players
-      .filter((player) => player.externalProviderId && tournamentPlayerIds.has(player.id))
-      .map((player) => [normalizeEspnPlayerId(player.externalProviderId ?? ""), player.id])
-  );
   const lockedMatchIds = await getLockedManualMatchIds(input.tournamentId);
   let matchesUpdated = 0;
   let winnersApplied = 0;
@@ -1916,7 +2005,7 @@ export async function syncEspnLiveUpdatesInSupabase(input: {
   let needsReview = 0;
   const finalizedThisSync = new Set<string>();
 
-  for (const match of state.matches.filter((item) => item.tournamentId === input.tournamentId)) {
+  for (const match of tournamentMatches) {
     const providerMatch = providerMatchById.get(normalizeEspnMatchId(match.externalProviderMatchId ?? ""));
     if (!providerMatch) continue;
     if (lockedMatchIds.has(match.id)) {
@@ -1930,36 +2019,67 @@ export async function syncEspnLiveUpdatesInSupabase(input: {
       continue;
     }
 
-    const { error } = await supabase
-      .from("matches")
-      .update({
-        status: result.status,
-        score_summary: result.scoreSummary,
-        winner_player_id: result.winnerPlayerId,
-        winner_draw_slot_id: result.winnerDrawSlotId,
-        updated_at: now
-      })
-      .eq("id", match.id);
-    throwIfError(error);
-    matchesUpdated += 1;
-    if (result.winnerPlayerId && result.status === "completed") {
-      winnersApplied += 1;
-      finalizedThisSync.add(match.id);
-    }
-
-    if (result.winnerPlayerId && match.nextMatchId && match.nextMatchSlot) {
-      const nextPlayerColumn = match.nextMatchSlot === "player1" ? "player1_id" : "player2_id";
-      const nextDrawSlotColumn = match.nextMatchSlot === "player1" ? "player1_draw_slot_id" : "player2_draw_slot_id";
-      const { error: advanceError } = await supabase
+    // Write only real changes. Rewriting identical values re-stamped updated_at
+    // on ~120 rows every sync, wasting writes and making updated_at useless as
+    // a change signal (the live-refresh delta endpoint depends on it).
+    const winnerChanged = (result.winnerPlayerId ?? null) !== (match.winnerPlayerId ?? null);
+    const changed =
+      result.status !== match.status ||
+      (result.scoreSummary ?? null) !== (match.scoreSummary ?? null) ||
+      winnerChanged ||
+      (result.winnerDrawSlotId ?? null) !== (match.winnerDrawSlotId ?? null);
+    if (changed) {
+      const { error } = await supabase
         .from("matches")
         .update({
-          [nextPlayerColumn]: result.winnerPlayerId,
-          [nextDrawSlotColumn]: result.winnerDrawSlotId,
+          status: result.status,
+          score_summary: result.scoreSummary,
+          winner_player_id: result.winnerPlayerId,
+          winner_draw_slot_id: result.winnerDrawSlotId,
           updated_at: now
         })
-        .eq("id", match.nextMatchId);
-      throwIfError(advanceError);
-      matchesAdvanced += 1;
+        .eq("id", match.id);
+      throwIfError(error);
+      matchesUpdated += 1;
+      if (winnerChanged && result.winnerPlayerId && result.status === "completed") {
+        winnersApplied += 1;
+        finalizedThisSync.add(match.id);
+      }
+      // Keep the in-memory row current for the fallback pass + advancement below.
+      match.status = result.status ?? match.status;
+      match.scoreSummary = result.scoreSummary ?? null;
+      match.winnerPlayerId = result.winnerPlayerId ?? null;
+      match.winnerDrawSlotId = result.winnerDrawSlotId ?? null;
+    }
+
+    // Advance (or self-heal) the winner into the next match's slot — checked on
+    // every sync, but written only when the slot doesn't already hold them.
+    if (result.winnerPlayerId && match.nextMatchId && match.nextMatchSlot) {
+      const nextMatch = matchById.get(match.nextMatchId);
+      const occupant = match.nextMatchSlot === "player1" ? nextMatch?.player1Id : nextMatch?.player2Id;
+      if (occupant !== result.winnerPlayerId) {
+        const nextPlayerColumn = match.nextMatchSlot === "player1" ? "player1_id" : "player2_id";
+        const nextDrawSlotColumn = match.nextMatchSlot === "player1" ? "player1_draw_slot_id" : "player2_draw_slot_id";
+        const { error: advanceError } = await supabase
+          .from("matches")
+          .update({
+            [nextPlayerColumn]: result.winnerPlayerId,
+            [nextDrawSlotColumn]: result.winnerDrawSlotId,
+            updated_at: now
+          })
+          .eq("id", match.nextMatchId);
+        throwIfError(advanceError);
+        matchesAdvanced += 1;
+        if (nextMatch) {
+          if (match.nextMatchSlot === "player1") {
+            nextMatch.player1Id = result.winnerPlayerId;
+            nextMatch.player1DrawSlotId = result.winnerDrawSlotId ?? null;
+          } else {
+            nextMatch.player2Id = result.winnerPlayerId;
+            nextMatch.player2DrawSlotId = result.winnerDrawSlotId ?? null;
+          }
+        }
+      }
     }
   }
 
@@ -1975,7 +2095,7 @@ export async function syncEspnLiveUpdatesInSupabase(input: {
       .map((link) => [normalizeEspnMatchId(link.providerMatchId), link])
   );
   let bracketFinalsApplied = 0;
-  for (const match of state.matches.filter((item) => item.tournamentId === input.tournamentId)) {
+  for (const match of tournamentMatches) {
     if (match.winnerPlayerId) continue; // already final — never override
     if (finalizedThisSync.has(match.id)) continue; // scoreboard pass just finalized it
     if (lockedMatchIds.has(match.id)) {
@@ -2054,6 +2174,19 @@ export async function syncEspnLiveUpdatesInSupabase(input: {
     last_synced_at: now
   }).eq("id", input.tournamentInstanceId)).error);
 
+  // Record the raw provider snapshot only when this sync changed something —
+  // the payload is ~300 KB, and stamping it every minute during live play was
+  // the main driver of database-size growth. Keep a short debugging trail.
+  let rawSnapshotId: string | null = null;
+  if (matchLinksUpdated > 0 || matchesUpdated > 0 || bracketFinalsApplied > 0 || needsReview > 0) {
+    rawSnapshotId = (await recordLiveScoreSnapshot({
+      tournamentId: input.tournamentId,
+      providerName: "EspnTennisProvider",
+      rawPayload: snapshotPayload
+    })) ?? null;
+    await pruneLiveScoreSnapshots(input.tournamentId, 5);
+  }
+
   const syncRun = await recordProviderSyncRun({
     tournamentInstanceId: input.tournamentInstanceId,
     tournamentId: input.tournamentId,
@@ -2062,7 +2195,12 @@ export async function syncEspnLiveUpdatesInSupabase(input: {
     status: "success",
     rawSnapshotId
   });
-  const scoring = await recalculateTournamentScoresInSupabase(input.tournamentId);
+  // Stored scores only move when a winner lands (or is corrected) — skip the
+  // recalculation (and its bracket/pick loads) on the no-change syncs that make
+  // up almost every tick during live play.
+  const scoring = winnersApplied > 0
+    ? await recalculateTournamentScoresInSupabase(input.tournamentId)
+    : { bracketsScored: 0, picksScored: 0 };
 
   return {
     syncRun,
@@ -2193,6 +2331,27 @@ export async function recordLiveScoreSnapshot(input: {
 
   throwIfError(error);
   return data?.id as string | undefined;
+}
+
+/**
+ * Keep only the newest `keep` raw snapshots for a tournament. Each snapshot is
+ * ~300 KB of provider payload; unbounded they were the main driver of
+ * database-size growth (1,800 rows accumulated over one Wimbledon).
+ */
+async function pruneLiveScoreSnapshots(tournamentId: string, keep: number) {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("live_score_snapshots")
+    .select("id")
+    .eq("tournament_id", tournamentId)
+    .order("created_at", { ascending: false })
+    .range(keep, keep + 999);
+  throwIfError(error);
+  const staleIds = (data ?? []).map((row: any) => row.id);
+  if (staleIds.length === 0) return;
+  // provider_sync_runs rows reference snapshots; detach them before deleting.
+  throwIfError((await supabase.from("provider_sync_runs").update({ raw_snapshot_id: null }).in("raw_snapshot_id", staleIds)).error);
+  throwIfError((await supabase.from("live_score_snapshots").delete().in("id", staleIds)).error);
 }
 
 /** True if any bracket in this tournament has at least one pick. */

@@ -5,7 +5,7 @@ import { AppFrame } from "@/components/AppFrame";
 import { BracketBoard } from "@/components/BracketBoard";
 import { PageLoading } from "@/components/PageLoading";
 import { PoolNav } from "@/components/PoolNav";
-import { getCachedAppState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
+import { getCachedAppState, isPoolCommissioner, loadAppState, refreshTournamentMatches } from "@/lib/app-state-client";
 import { findTournamentForPool } from "@/lib/state-helpers";
 import { useAutoSync } from "@/lib/use-auto-sync";
 import type { AppState } from "@/lib/types";
@@ -17,11 +17,12 @@ export default function TournamentBracketPage({ params }: { params: { poolId: st
   }, [params.poolId]);
   // Keep the draw board live: pull fresh ESPN results on mount and every ~60s so
   // in-progress matches show "Live" (not "Upcoming") while someone is watching.
+  // Refresh ticks merge only changed matches (a few KB), not the full state.
   const syncTournament = state ? findTournamentForPool(state, params.poolId) : undefined;
   useAutoSync(syncTournament, {
     staleMinutes: 1,
     intervalMs: 60_000,
-    onSynced: async () => setState(await loadAppState(params.poolId))
+    onSynced: async () => setState(await refreshTournamentMatches(params.poolId))
   });
   if (!state) return <PageLoading />;
 

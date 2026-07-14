@@ -7,7 +7,7 @@ import { AppFrame } from "@/components/AppFrame";
 import { PageLoading } from "@/components/PageLoading";
 import { PoolNav } from "@/components/PoolNav";
 import { getLeaderboard } from "@/lib/services/scoring-service";
-import { getCachedAppState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
+import { getCachedAppState, isPoolCommissioner, loadAppState, refreshTournamentMatches } from "@/lib/app-state-client";
 import { findTournamentForPool, isPoolPickingClosed } from "@/lib/state-helpers";
 import { useAutoSync } from "@/lib/use-auto-sync";
 import type { AppState } from "@/lib/types";
@@ -21,7 +21,9 @@ export default function LeaderboardPage({ params }: { params: { poolId: string }
   useAutoSync(tournament, {
     staleMinutes: 1,
     intervalMs: 60_000,
-    onSynced: async () => setState(await loadAppState(params.poolId))
+    // Merge only changed matches into the cached state (a few KB) instead of
+    // re-downloading the full pool state on every tick.
+    onSynced: async () => setState(await refreshTournamentMatches(params.poolId))
   });
 
   if (!state) return <PageLoading />;
