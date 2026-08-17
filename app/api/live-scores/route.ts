@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { EspnTennisProvider } from "@/lib/providers/espn-tennis-provider";
-import { getAppStateFromSupabase, isSupabaseConfigured } from "@/lib/supabase/persistence";
+import { getLiveScoreContextFromSupabase, isSupabaseConfigured } from "@/lib/supabase/persistence";
 import type { BracketLiveScore, ProviderEventType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -17,14 +17,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const state = await getAppStateFromSupabase();
-    const tournament = state.tournaments.find((item) => item.id === tournamentId);
+    const { tournament, matches } = await getLiveScoreContextFromSupabase(tournamentId);
     if (!tournament) {
       return NextResponse.json({ ok: false, error: "Tournament not found." }, { status: 404 });
     }
 
-    const internalMatches = state.matches.filter((match) => match.tournamentId === tournament.id && match.externalProviderMatchId);
-    const internalByProviderId = new Map(internalMatches.map((match) => [normalizeEspnMatchId(match.externalProviderMatchId ?? ""), match]));
+    const internalByProviderId = new Map(matches.map((match) => [normalizeEspnMatchId(match.externalProviderMatchId), match]));
     const provider = new EspnTennisProvider();
     const checkedAt = new Date().toISOString();
     const eventType: ProviderEventType = tournament.gender === "women" ? "womens_singles" : "mens_singles";

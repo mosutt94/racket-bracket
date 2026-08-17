@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppFrame } from "@/components/AppFrame";
 import { PasswordField } from "@/components/PasswordField";
-import { getCurrentUserForState, loadAppState } from "@/lib/app-state-client";
+import { getCurrentUserForState, loadDashboardState } from "@/lib/app-state-client";
 import { getSavedCurrentUser, saveCurrentUser } from "@/lib/current-user";
 import { validatePassword } from "@/lib/password-rules";
 import { getUpcomingSlam } from "@/lib/services/bracket-shell-service";
@@ -40,12 +40,16 @@ export default function CreatePoolPage() {
   const passwordReady = !needsPassword || (validatePassword(password) === null && passwordsMatch);
 
   useEffect(() => {
-    if (!getSavedCurrentUser()) {
+    const saved = getSavedCurrentUser();
+    if (!saved) {
       router.replace("/auth");
       return;
     }
 
-    loadAppState().then((state) => {
+    // This page only needs to resolve the signed-in profile by email, so take the
+    // user-scoped read. loadAppState() with no poolId falls through to the full
+    // cross-pool state — every pool's picks and sync runs — to fill in one name.
+    loadDashboardState(saved.id).then((state) => {
       setUser(getCurrentUserForState(state));
     });
   }, [router]);

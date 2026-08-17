@@ -4,6 +4,7 @@ import { buildEspnMappingPreview } from "@/lib/services/espn-mapping-service";
 import {
   getAppStateFromSupabase,
   importEspnDrawInSupabase,
+  isDrawPublishedInSupabase,
   isSupabaseConfigured,
   isTournamentPickingClosedInSupabase,
   refreshDrawSeedsInSupabase,
@@ -35,10 +36,18 @@ export async function POST(request: Request) {
   const guard = await requireSiteOwner(tournamentId);
   if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
 
-  // Draw import touches the shared per-Slam tournament. Freeze it entirely once
-  // play has begun: the destructive clear-all would nuke a live tournament for
-  // everyone, and the safe seed refresh is pointless after the draw is set.
-  if (await isTournamentPickingClosedInSupabase(tournamentId)) {
+  // Draw import touches the shared per-Slam tournament. Freeze it once play has
+  // begun: the destructive clear-all would nuke a live tournament for everyone,
+  // and the safe seed refresh is pointless after the draw is set.
+  //
+  // But "picking closed" is not the same as "the draw is in". ESPN publishes a
+  // Slam draw only a few days before round 1, so picking can close (deadline
+  // passed, or the commissioner deliberately closed it to stop people picking a
+  // placeholder bracket) while all 128 slots still read "TBD" — and freezing on
+  // that would lock the commissioner out of ever importing the real draw, leaving
+  // the Slam permanently unplayable. While the draw is still unpublished there is
+  // nothing to protect, so the import stays available.
+  if ((await isTournamentPickingClosedInSupabase(tournamentId)) && (await isDrawPublishedInSupabase(tournamentId))) {
     return NextResponse.json(
       { ok: false, error: "Draw import is locked once the tournament has started." },
       { status: 403 }

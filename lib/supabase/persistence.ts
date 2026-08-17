@@ -842,6 +842,90 @@ export async function setTournamentStatusInSupabase(input: {
 }
 
 /**
+ * The two things /api/live-scores needs to map an ESPN scoreboard onto this
+ * tournament: which Slam/year/gender to ask the provider for, and the provider
+ * match ids already stored on this tournament's matches.
+ *
+ * Deliberately NOT getAppStateFromSupabase(): my-bracket polls this route every
+ * 60s per open tab, and the full-state load ships every table for every pool
+ * (thousands of provider_sync_runs and bracket_picks rows) on each tick. Two
+ * narrow reads of ~127 rows keep live polling off the egress budget.
+ */
+export async function getLiveScoreContextFromSupabase(tournamentId: string): Promise<{
+  tournament: { id: string; slamType: SlamType; year: number; gender: Gender } | null;
+  matches: { id: string; externalProviderMatchId: string }[];
+}> {
+  const supabase = getClient();
+  const { data: tournamentRow, error: tournamentError } = await supabase
+    .from("tournaments")
+    .select("id, slam_type, year, gender")
+    .eq("id", tournamentId)
+    .maybeSingle();
+  throwIfError(tournamentError);
+  if (!tournamentRow) return { tournament: null, matches: [] };
+
+  // Only matches already carrying an ESPN id can be matched to the scoreboard.
+  const { data: matchRows, error: matchesError } = await supabase
+    .from("matches")
+    .select("id, external_provider_match_id")
+    .eq("tournament_id", tournamentId)
+    .not("external_provider_match_id", "is", null);
+  throwIfError(matchesError);
+
+  return {
+    tournament: {
+      id: tournamentRow.id,
+      slamType: tournamentRow.slam_type as SlamType,
+      year: tournamentRow.year,
+      gender: tournamentRow.gender as Gender
+    },
+    matches: (matchRows ?? []).map((row: any) => ({
+      id: row.id,
+      externalProviderMatchId: row.external_provider_match_id as string
+    }))
+  };
+}
+
+/**
+ * Whether the real ESPN draw has landed for this tournament — the server-side
+ * twin of isDrawPublished() in state-helpers. See that function for why picking
+ * against an unpublished (all-"TBD") draw has to be blocked rather than merely
+ * discouraged: one early pick forces a full bracket wipe across every pool on
+ * the Slam when the draw is finally imported.
+ */
+export async function isDrawPublishedInSupabase(tournamentId: string): Promise<boolean> {
+  const supabase = getClient();
+  const { data: tournament, error: tournamentError } = await supabase
+    .from("tournaments")
+    .select("tournament_instance_id")
+    .eq("id", tournamentId)
+    .maybeSingle();
+  throwIfError(tournamentError);
+  if (!tournament?.tournament_instance_id) return true;
+
+  const { data: slots, error: slotsError } = await supabase
+    .from("draw_slots")
+    .select("player_id, placeholder_label")
+    .eq("tournament_instance_id", tournament.tournament_instance_id);
+  throwIfError(slotsError);
+  if (!slots || slots.length === 0) return true;
+
+  // Cheap path: a never-imported draw still carries its "TBD n" labels.
+  if (slots.some((slot: any) => slot.placeholder_label)) return false;
+
+  // An import run before ESPN filled the bracket in clears the labels but writes
+  // ESPN's own "TBD" through as the player name, so check the names too.
+  const playerIds = Array.from(new Set(slots.map((slot: any) => slot.player_id).filter(Boolean)));
+  if (playerIds.length === 0) return true;
+  const { data: players, error: playersError } = await supabase
+    .from("players")
+    .select("name")
+    .in("id", playerIds);
+  throwIfError(playersError);
+  return !(players ?? []).some((player: any) => !player.name || /^tbd\b/i.test(String(player.name).trim()));
+}
+
+/**
  * Whether a tournament's picking has closed — the commissioner locked the status
  * or the auto-lock picking deadline has passed. Used to freeze scoring once play
  * begins, so a live, shared-per-Slam tournament can't be re-scored mid-event.
@@ -2169,8 +2253,19 @@ export async function syncEspnLiveUpdatesInSupabase(input: {
   const tournamentUpdate: Record<string, unknown> = { status: tournamentStatus, last_synced_at: now };
   if (allComplete && !tournament.completedAt) tournamentUpdate.completed_at = now;
   throwIfError((await supabase.from("tournaments").update(tournamentUpdate).eq("id", input.tournamentId)).error);
+  // The instance status is what the admin dashboard's "Draw status" tile shows,
+  // so it has to stay honest. Marking a Slam "in progress" unconditionally meant a
+  // tournament whose draw ESPN hasn't even published yet reported "in progress" —
+  // exactly when the commissioner needs to see that the draw is still missing.
+  const instanceStatus = tournamentStatus === "completed"
+    ? "completed"
+    : !(await isDrawPublishedInSupabase(input.tournamentId))
+      ? "draw_pending"
+      : winnersApplied > 0 || matchesUpdated > 0
+        ? "in_progress"
+        : "draw_ready";
   throwIfError((await supabase.from("tournament_instances").update({
-    status: tournamentStatus === "completed" ? "completed" : "in_progress",
+    status: instanceStatus,
     last_synced_at: now
   }).eq("id", input.tournamentInstanceId)).error);
 
@@ -2184,7 +2279,7 @@ export async function syncEspnLiveUpdatesInSupabase(input: {
       providerName: "EspnTennisProvider",
       rawPayload: snapshotPayload
     })) ?? null;
-    await pruneLiveScoreSnapshots(input.tournamentId, 5);
+    await pruneLiveScoreSnapshots();
   }
 
   const syncRun = await recordProviderSyncRun({
@@ -2333,25 +2428,59 @@ export async function recordLiveScoreSnapshot(input: {
   return data?.id as string | undefined;
 }
 
-/**
- * Keep only the newest `keep` raw snapshots for a tournament. Each snapshot is
- * ~300 KB of provider payload; unbounded they were the main driver of
- * database-size growth (1,800 rows accumulated over one Wimbledon).
- */
-async function pruneLiveScoreSnapshots(tournamentId: string, keep: number) {
+const LIVE_SNAPSHOT_KEEP_PER_TOURNAMENT = 5;
+
+/** Delete snapshot rows by id, detaching the sync runs that reference them. */
+async function deleteLiveScoreSnapshots(staleIds: string[]) {
+  if (staleIds.length === 0) return 0;
   const supabase = getClient();
-  const { data, error } = await supabase
-    .from("live_score_snapshots")
-    .select("id")
-    .eq("tournament_id", tournamentId)
-    .order("created_at", { ascending: false })
-    .range(keep, keep + 999);
-  throwIfError(error);
-  const staleIds = (data ?? []).map((row: any) => row.id);
-  if (staleIds.length === 0) return;
-  // provider_sync_runs rows reference snapshots; detach them before deleting.
-  throwIfError((await supabase.from("provider_sync_runs").update({ raw_snapshot_id: null }).in("raw_snapshot_id", staleIds)).error);
-  throwIfError((await supabase.from("live_score_snapshots").delete().in("id", staleIds)).error);
+  // Delete in batches: `in.(...)` lands in the URL, and thousands of uuids
+  // overflow PostgREST's request-line limit.
+  for (let index = 0; index < staleIds.length; index += 200) {
+    const batch = staleIds.slice(index, index + 200);
+    // provider_sync_runs rows reference snapshots; detach them before deleting.
+    throwIfError((await supabase.from("provider_sync_runs").update({ raw_snapshot_id: null }).in("raw_snapshot_id", batch)).error);
+    throwIfError((await supabase.from("live_score_snapshots").delete().in("id", batch)).error);
+  }
+  return staleIds.length;
+}
+
+/**
+ * Keep only the newest `keep` raw snapshots for EVERY tournament, not just the
+ * one currently syncing. Each snapshot is ~300 KB of provider payload, so
+ * unbounded they are by far the largest thing in the database — one Wimbledon
+ * accumulated 1,626 rows (~470 MB), which on its own exceeded Supabase's
+ * 500 MB free-tier allowance.
+ *
+ * Sweeping globally matters because the per-tournament prune only ran during a
+ * sync that changed something: once a Slam finished it stopped syncing forever
+ * and its backlog became permanent. Reading ids only (a few KB) keeps this cheap
+ * enough to run on every snapshot write.
+ */
+export async function pruneLiveScoreSnapshots(keep = LIVE_SNAPSHOT_KEEP_PER_TOURNAMENT) {
+  const supabase = getClient();
+  const rows = await fetchAllRows((from, to) =>
+    supabase
+      .from("live_score_snapshots")
+      .select("id, tournament_id, created_at")
+      .order("created_at", { ascending: false })
+      .range(from, to)
+  );
+
+  // Rows arrive newest-first, so the first `keep` seen per tournament are the
+  // keepers and everything after them is stale.
+  const seenPerTournament = new Map<string, number>();
+  const staleIds: string[] = [];
+  for (const row of rows) {
+    const seen = seenPerTournament.get(row.tournament_id) ?? 0;
+    if (seen < keep) {
+      seenPerTournament.set(row.tournament_id, seen + 1);
+      continue;
+    }
+    staleIds.push(row.id);
+  }
+
+  return deleteLiveScoreSnapshots(staleIds);
 }
 
 /** True if any bracket in this tournament has at least one pick. */
@@ -2584,6 +2713,9 @@ export async function importEspnDrawInSupabase(input: { tournamentId: string; dr
     providerName: input.draw.providerName,
     rawPayload: input.draw.rawPayload
   });
+  // Draw re-imports write a snapshot too — prune here as well, or a commissioner
+  // retrying an import quietly grows the table past its cap.
+  await pruneLiveScoreSnapshots();
 
   const syncRun = await recordProviderSyncRun({
     tournamentInstanceId: tournament.tournament_instance_id,

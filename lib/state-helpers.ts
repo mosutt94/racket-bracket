@@ -39,6 +39,42 @@ export function isPoolPickingClosed(state: AppState, poolId: string): boolean {
 }
 
 /**
+ * Whether the real ESPN draw has landed for this tournament's Slam.
+ *
+ * A fresh bracket shell is seeded with 128 placeholder slots ("TBD 1".."TBD 128")
+ * and the ESPN import clears `placeholderLabel` as it writes real names in. ESPN
+ * doesn't publish a Grand Slam draw until a few days before round 1, so there is
+ * a real window where a pool exists, picking is open, and every slot is still TBD.
+ *
+ * Picks made in that window are worse than useless: importEspnDrawInSupabase
+ * refuses to run once any pick exists unless you also clear every bracket on the
+ * Slam, so one early pick forces a full wipe for every pool. Call sites use this
+ * to keep picking shut until there's a real draw to pick against.
+ */
+export function isDrawPublished(state: AppState, tournament: Pick<Tournament, "tournamentInstanceId">): boolean {
+  const slots = state.drawSlots.filter((slot) => slot.tournamentInstanceId === tournament.tournamentInstanceId);
+  // No slots loaded (a scoped state read that didn't include them) — don't claim
+  // the draw is missing and block picking on incomplete information.
+  if (slots.length === 0) return true;
+
+  const playerNamesById = new Map(state.players.map((player) => [player.id, player.name]));
+  return slots.every((slot) => {
+    if (slot.placeholderLabel) return false;
+    // An import run before ESPN filled the bracket in clears placeholderLabel but
+    // writes ESPN's own "TBD" through as the player name, so the label alone isn't
+    // enough. ("Qualifier"/"Wild Card" are real, expected draw entries — those
+    // don't count as unpublished.)
+    return !isPlaceholderPlayerName(playerNamesById.get(slot.playerId));
+  });
+}
+
+/** "TBD", "TBD 17", "" — the names a not-yet-published draw leaves behind. */
+function isPlaceholderPlayerName(name: string | undefined): boolean {
+  if (!name) return true;
+  return /^tbd\b/i.test(name.trim());
+}
+
+/**
  * The effective points-per-round for a pool: its own pool_round_scoring overrides,
  * falling back to the shared tournament_rounds. Returned in the tournament's round
  * shape (labels/order preserved) with only pointsPerCorrectPick overridden, so a

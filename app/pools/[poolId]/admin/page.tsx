@@ -10,7 +10,7 @@ import { PoolNav } from "@/components/PoolNav";
 import { getCachedAppState, getCurrentUserForState, isPoolCommissioner, loadAppState } from "@/lib/app-state-client";
 import { saveCurrentUser } from "@/lib/current-user";
 import { validatePassword } from "@/lib/password-rules";
-import { effectivePoolRounds, findTournamentForPool, isPickingClosed, isPoolPickingClosed } from "@/lib/state-helpers";
+import { effectivePoolRounds, findTournamentForPool, isDrawPublished, isPickingClosed, isPoolPickingClosed } from "@/lib/state-helpers";
 import type { AppState, TournamentRound, TournamentStatus } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
 
@@ -132,6 +132,9 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
   // frozen — scoring edits and the clear-all-picks re-import. The server rejects
   // them too; these flags just reflect that in the UI.
   const tournamentStarted = isPickingClosed(activeTournament);
+  // Whether ESPN's real draw is in yet. Picking can close on a Slam whose draw is
+  // still all "TBD", and the draw import must stay reachable in that window.
+  const drawPublished = isDrawPublished(state, activeTournament);
   // Per-pool picking lock: this pool's own early lock, plus the shared Slam start.
   // The commissioner controls their own pool's lock; once the Slam starts everyone
   // is locked regardless. Scoring edits freeze when this pool's picks close.
@@ -578,9 +581,11 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
               </div>
               {/* Draw import touches the shared per-Slam tournament and is only
                   useful during setup, so both buttons disappear once play starts
-                  (the server enforces this too). */}
+                  (the server enforces this too). The exception is a Slam whose
+                  draw ESPN hasn't published yet: picking may already have closed,
+                  but the real draw still has to get in, so keep the import live. */}
               <div className="grid gap-2 md:min-w-[220px]">
-                {tournamentStarted ? (
+                {tournamentStarted && drawPublished ? (
                   <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-500">
                     🔒 Draw import is locked once the tournament has started.
                   </p>

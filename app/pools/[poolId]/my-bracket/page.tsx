@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Lock, LocateFixed, Save, Unlock } from "lucide-react";
+import { CalendarClock, CheckCircle2, Lock, LocateFixed, Save, Unlock } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppFrame } from "@/components/AppFrame";
 import { BracketBoard } from "@/components/BracketBoard";
@@ -9,10 +9,26 @@ import { PoolNav } from "@/components/PoolNav";
 import { getCachedAppState, getCurrentUserForState, isPoolCommissioner, loadAppState, refreshTournamentMatches } from "@/lib/app-state-client";
 import { pickWinner } from "@/lib/services/bracket-service";
 import { getSlamShortLabel } from "@/lib/services/bracket-shell-service";
-import { effectivePoolRounds, findTournamentForPool, isPoolPickingClosed } from "@/lib/state-helpers";
+import { effectivePoolRounds, findTournamentForPool, isDrawPublished, isPoolPickingClosed } from "@/lib/state-helpers";
 import { useAutoSync } from "@/lib/use-auto-sync";
 import type { AppState, Bracket, BracketLiveScore } from "@/lib/types";
 import { createUuid } from "@/lib/uuid";
+
+// Deadlines are shown in ET (the Slams' own broadcast timezone), matching the
+// admin page's auto-lock label. Returns null for an unparseable stamp so callers
+// can fall back rather than render "Invalid Date".
+function formatDeadline(deadline: string): string | null {
+  const parsed = new Date(deadline);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
 
 // Seed the first render from cached state so navigating back to your bracket is
 // instant instead of flashing blank. Only seed when a real bracket already
@@ -158,6 +174,7 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
   // commissioner/tournament closed picking (can't be reopened by the player).
   const userLocked = activeBracket.status !== "draft";
   const pickingClosed = isPoolPickingClosed(state, params.poolId);
+  const drawPublished = isDrawPublished(state, tournament);
   const locked = userLocked || pickingClosed;
   const pickedCount = matches.filter((match) => state.bracketPicks.some((pick) => pick.bracketId === activeBracket.id && pick.matchId === match.id)).length;
   const sortedMatches = [...matches].sort((a, b) => a.roundNumber - b.roundNumber || a.matchNumber - b.matchNumber);
@@ -241,6 +258,45 @@ export default function MyBracketPage({ params }: { params: { poolId: string } }
   const canSaveDraft = !locked && saveStatus === "error";
   const saveLabel = saveStatus === "saving" || dirty ? "Saving..." : saveStatus === "error" ? "Retry save" : "Saved";
   const SaveButtonIcon = dirty || saveStatus === "saving" || saveStatus === "error" ? Save : CheckCircle2;
+
+  // ESPN doesn't publish a Grand Slam draw until a few days before round 1, so a
+  // pool can exist with picking open while all 128 slots still read "TBD". Show
+  // the waiting room instead of a bracket of placeholders: picks made now would
+  // have to be wiped for every pool when the real draw is imported.
+  if (!drawPublished) {
+    const deadlineLabel = tournament.pickingDeadline ? formatDeadline(tournament.pickingDeadline) : null;
+    return (
+      <AppFrame compact slam={tournament.slamType}>
+        <main className="flex min-h-[100dvh] flex-col px-2 pt-1 sm:px-3">
+          <div className="mb-1 shrink-0">
+            <PoolNav poolId={params.poolId} compact showAccount isCommissioner={isPoolCommissioner(state, params.poolId)} />
+          </div>
+          <div className="flex flex-1 items-center justify-center py-10">
+            <div className="w-full max-w-md rounded-2xl border border-court-200 bg-white p-6 text-center shadow-sm">
+              <div className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-court-100 text-court-700">
+                <CalendarClock size={24} />
+              </div>
+              <h1 className="text-xl font-black text-ink">
+                The {getSlamShortLabel(tournament.slamType, tournament.year, tournament.gender)} draw isn&apos;t out yet
+              </h1>
+              <p className="mt-2 text-sm font-semibold text-slate-500">
+                Tennis draws are announced a few days before play begins. Once it&apos;s published, all 128 players
+                appear here and you can fill in your bracket.
+              </p>
+              {deadlineLabel ? (
+                <p className="mt-4 rounded-lg bg-court-50 px-3 py-2 text-sm font-bold text-court-800">
+                  Picks are due {deadlineLabel}
+                </p>
+              ) : null}
+              <p className="mt-4 text-xs font-semibold text-slate-400">
+                Nothing to do right now — we&apos;ll have the bracket ready when the draw lands.
+              </p>
+            </div>
+          </div>
+        </main>
+      </AppFrame>
+    );
+  }
 
   return (
     <AppFrame compact slam={tournament?.slamType}>
