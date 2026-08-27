@@ -215,8 +215,11 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
       setState(await loadAppState(params.poolId));
       let text: string;
       if (result.mode === "seeds") {
-        // Picks already exist, so we only refreshed seeds — nobody's picks touched.
-        text = `Pulled in the latest seeds — picks were left untouched (${result.seedsUpdated} seeds set).`;
+        // Picks already exist, so this was the non-destructive refresh: seeds,
+        // plus real names for any "Qualifier" slots that have since resolved.
+        text = result.namesResolved
+          ? `Filled in ${result.namesResolved} qualifier name${result.namesResolved === 1 ? "" : "s"} and refreshed seeds — everyone's picks were left untouched.`
+          : `Pulled in the latest seeds — picks were left untouched (${result.seedsUpdated} seeds set).`;
       } else if (result.warning) {
         text = `Imported, but: ${result.warning}`;
       } else {

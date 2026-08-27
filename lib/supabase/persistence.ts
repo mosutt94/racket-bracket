@@ -2505,7 +2505,7 @@ export async function tournamentHasPicksInSupabase(tournamentId: string): Promis
  * pulled in later without re-importing — it never touches the player↔slot
  * assignments, matches, brackets, or picks, so it's safe to run after people pick.
  */
-export async function refreshDrawSeedsInSupabase(input: { tournamentId: string; draw: EspnDrawImportData }): Promise<{ seedsUpdated: number }> {
+export async function refreshDrawSeedsInSupabase(input: { tournamentId: string; draw: EspnDrawImportData }): Promise<{ seedsUpdated: number; namesResolved: number }> {
   const supabase = getClient();
   const { data: tournament, error: tournamentError } = await supabase
     .from("tournaments")
@@ -2524,15 +2524,48 @@ export async function refreshDrawSeedsInSupabase(input: { tournamentId: string; 
     (slots ?? []).map((row: any) => [row.position, { id: row.id, playerId: row.player_id }])
   );
 
+  // Current names, so we can tell resolved entrants from "Qualifier" placeholders.
+  const playerIds = Array.from(new Set((slots ?? []).map((row: any) => row.player_id).filter(Boolean)));
+  const { data: playerRows, error: playersError } = playerIds.length
+    ? await supabase.from("players").select("id, name").in("id", playerIds)
+    : { data: [], error: null };
+  throwIfError(playersError);
+  const playerNameById = new Map<string, string>((playerRows ?? []).map((row: any) => [row.id, row.name]));
+
   const now = new Date().toISOString();
   const updates: any[] = [];
   let seedsUpdated = 0;
+  let namesResolved = 0;
   for (const matchup of input.draw.matchups) {
     for (const slot of [matchup.player1, matchup.player2]) {
       const drawSlot = slotByPosition.get(slot.position);
       if (!drawSlot?.playerId) continue;
       const seed = slot.seed ?? null;
-      // Seed only — deliberately not name/country/assignments, so picks stay valid.
+      // A slot imported before its qualifier finished holds a placeholder-named
+      // player. Picks point at the player ROW (its id), so writing the real name
+      // onto that row retroactively resolves every pick made on "Qualifier" —
+      // nothing else moves. Never overwrite a real name (post-start corrections
+      // belong to the admin match editor), and never write ESPN's own "TBD"
+      // placeholder over anything.
+      const currentName = playerNameById.get(drawSlot.playerId);
+      if (isUnresolvedEntrantName(currentName) && !isUnresolvedEntrantName(slot.playerName)) {
+        updates.push(
+          supabase
+            .from("players")
+            .update({
+              name: slot.playerName,
+              country: slot.country ?? null,
+              external_provider_id: slot.playerProviderId ?? null,
+              seed
+            })
+            .eq("id", drawSlot.playerId)
+        );
+        updates.push(supabase.from("draw_slots").update({ seed, resolved_at: now, updated_at: now }).eq("id", drawSlot.id));
+        namesResolved += 1;
+        if (seed !== null) seedsUpdated += 1;
+        continue;
+      }
+      // Otherwise seed only — deliberately not name/country, so picks stay valid.
       updates.push(supabase.from("players").update({ seed }).eq("id", drawSlot.playerId));
       updates.push(supabase.from("draw_slots").update({ seed, updated_at: now }).eq("id", drawSlot.id));
       if (seed !== null) seedsUpdated += 1;
@@ -2540,7 +2573,15 @@ export async function refreshDrawSeedsInSupabase(input: { tournamentId: string; 
   }
   const results = await Promise.all(updates);
   for (const result of results) throwIfError(result.error);
-  return { seedsUpdated };
+  return { seedsUpdated, namesResolved };
+}
+
+/** ESPN uses "TBD" for draw slots whose entrant isn't decided yet (rain-delayed
+ *  qualifying, mostly). We import those as "Qualifier" so brackets read
+ *  intentionally; both spellings count as unresolved here. */
+function isUnresolvedEntrantName(name: string | null | undefined): boolean {
+  if (!name || !name.trim()) return true;
+  return /^(tbd|qualifier)\b/i.test(name.trim());
 }
 
 const ALLOWED_DESIGNATIONS = new Set(["Q", "WC", "LL", "PR"]);
@@ -2627,7 +2668,10 @@ export async function importEspnDrawInSupabase(input: { tournamentId: string; dr
           .from("players")
           .update({
             external_provider_id: slot.playerProviderId,
-            name: slot.playerName,
+            // A slot whose entrant isn't decided yet (rain-delayed qualifying)
+            // imports as a pickable "Qualifier" entry; the post-pick refresh
+            // path writes the real name onto this same row once it's known.
+            name: isUnresolvedEntrantName(slot.playerName) ? "Qualifier" : slot.playerName,
             country: slot.country ?? null,
             seed: slot.seed ?? null
           })

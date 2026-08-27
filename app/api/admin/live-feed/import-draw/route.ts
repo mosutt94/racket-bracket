@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     // seeds shortly after publishing the names). Non-destructive.
     if (!resetExistingPicks && (await tournamentHasPicksInSupabase(tournamentId))) {
       const seedResult = await refreshDrawSeedsInSupabase({ tournamentId, draw });
-      return NextResponse.json({ ok: true, mode: "seeds", seedsUpdated: seedResult.seedsUpdated });
+      return NextResponse.json({ ok: true, mode: "seeds", seedsUpdated: seedResult.seedsUpdated, namesResolved: seedResult.namesResolved });
     }
 
     const result = await importEspnDrawInSupabase({ tournamentId, draw, resetExistingPicks });
