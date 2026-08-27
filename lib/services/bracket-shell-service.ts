@@ -119,11 +119,12 @@ export function getSlamCalendarDefaults(slamType: SlamType, year: number): SlamC
       // 15-day format opens R1 on SUNDAY Aug 30 (Session 1, 11am ET), with the
       // final Sun Sep 13. Don't trust ESPN's bracket payload for day 1 — it
       // stamps every R1 match with a single per-round date (Aug 31, which is
-      // really day 2). mainDrawStartsAt doubles as the picking auto-lock, so
-      // 10:00 UTC = 6am ET — hours before day-1 play. Touch up per year.
+      // really day 2). mainDrawStartsAt doubles as the picking auto-lock and is
+      // set to first ball itself — 15:00 UTC = 11am ET (commissioner's call:
+      // picks close exactly when play begins, no earlier). Touch up per year.
       return {
         qualifyingStartsAt: utcIso(year, 8, 25, 10),
-        mainDrawStartsAt: utcIso(year, 8, 30, 10),
+        mainDrawStartsAt: utcIso(year, 8, 30, 15),
         finalStartsAt: utcIso(year, 9, 13, 9)
       };
   }
