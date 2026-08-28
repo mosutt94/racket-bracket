@@ -531,7 +531,14 @@ export class EspnTennisProvider {
         Accept: "application/json",
         "User-Agent": "Mozilla/5.0 Racket Bracket ESPN preview"
       },
-      cache: "no-store"
+      cache: "no-store",
+      // Fail fast when ESPN stalls. Without a timeout a hung ESPN socket holds
+      // the whole serverless invocation open; with dozens of bracket tabs each
+      // polling live scores, hung invocations saturate Vercel's concurrency and
+      // every OTHER request (dashboard, state, picks) queues behind them for
+      // minutes. An 8s abort turns an ESPN brownout into a skipped poll tick —
+      // callers already treat provider errors as "no update this tick".
+      signal: AbortSignal.timeout(8_000)
     });
 
     if (!response.ok) {
@@ -547,7 +554,10 @@ export class EspnTennisProvider {
         Accept: "text/html,application/xhtml+xml",
         "User-Agent": "Mozilla/5.0 Racket Bracket ESPN preview"
       },
-      cache: "no-store"
+      cache: "no-store",
+      // The bracket HTML is ~1 MB and slower than the JSON API — allow more,
+      // but still bounded for the same concurrency-pileup reason as request().
+      signal: AbortSignal.timeout(15_000)
     });
 
     if (!response.ok) {
