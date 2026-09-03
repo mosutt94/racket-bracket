@@ -217,8 +217,11 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
       if (result.mode === "seeds") {
         // Picks already exist, so this was the non-destructive refresh: seeds,
         // plus real names for any "Qualifier" slots that have since resolved.
-        text = result.namesResolved
-          ? `Filled in ${result.namesResolved} qualifier name${result.namesResolved === 1 ? "" : "s"} and refreshed seeds — everyone's picks were left untouched.`
+        const parts: string[] = [];
+        if (result.namesResolved) parts.push(`filled in ${result.namesResolved} qualifier name${result.namesResolved === 1 ? "" : "s"}`);
+        if (result.replacementsApplied) parts.push(`applied ${result.replacementsApplied} withdrawal replacement${result.replacementsApplied === 1 ? "" : "s"} (slot keeps its picks)`);
+        text = parts.length
+          ? `${parts.join(", ")} and refreshed seeds — everyone's picks were left untouched.`
           : `Pulled in the latest seeds — picks were left untouched (${result.seedsUpdated} seeds set).`;
       } else if (result.warning) {
         text = `Imported, but: ${result.warning}`;
@@ -588,23 +591,25 @@ export default function AdminPage({ params }: { params: { poolId: string } }) {
                   draw ESPN hasn't published yet: picking may already have closed,
                   but the real draw still has to get in, so keep the import live. */}
               <div className="grid gap-2 md:min-w-[220px]">
+                {/* The pick-preserving refresh stays available all tournament —
+                    it's how late seeds, resolved qualifiers, and withdrawal
+                    replacements ("A. Gea (Was Ruud)") reach a draw people have
+                    already picked. Only the destructive clear-all freezes. */}
+                <button onClick={() => importDraw(false)} disabled={importBusy} className="rounded-lg bg-ink px-4 py-3 font-bold text-white disabled:bg-slate-300">
+                  {importBusy ? "Refreshing..." : tournamentStarted && drawPublished ? "Refresh names / seeds / withdrawals" : "Import draw / refresh seeds"}
+                </button>
                 {tournamentStarted && drawPublished ? (
                   <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-500">
-                    🔒 Draw import is locked once the tournament has started.
+                    🔒 Clearing picks is locked once the tournament has started.
                   </p>
                 ) : (
-                  <>
-                    <button onClick={() => importDraw(false)} disabled={importBusy} className="rounded-lg bg-ink px-4 py-3 font-bold text-white disabled:bg-slate-300">
-                      {importBusy ? "Importing..." : "Import draw / refresh seeds"}
-                    </button>
-                    <button
-                      onClick={confirmResetImport}
-                      disabled={importBusy}
-                      className="rounded-lg border border-clay-300 px-4 py-2 text-sm font-bold text-clay-700 transition hover:bg-clay-100 disabled:opacity-50"
-                    >
-                      Re-import &amp; clear all picks
-                    </button>
-                  </>
+                  <button
+                    onClick={confirmResetImport}
+                    disabled={importBusy}
+                    className="rounded-lg border border-clay-300 px-4 py-2 text-sm font-bold text-clay-700 transition hover:bg-clay-100 disabled:opacity-50"
+                  >
+                    Re-import &amp; clear all picks
+                  </button>
                 )}
               </div>
               {importStatus ? (

@@ -2505,7 +2505,7 @@ export async function tournamentHasPicksInSupabase(tournamentId: string): Promis
  * pulled in later without re-importing — it never touches the player↔slot
  * assignments, matches, brackets, or picks, so it's safe to run after people pick.
  */
-export async function refreshDrawSeedsInSupabase(input: { tournamentId: string; draw: EspnDrawImportData }): Promise<{ seedsUpdated: number; namesResolved: number }> {
+export async function refreshDrawSeedsInSupabase(input: { tournamentId: string; draw: EspnDrawImportData }): Promise<{ seedsUpdated: number; namesResolved: number; replacementsApplied: number }> {
   const supabase = getClient();
   const { data: tournament, error: tournamentError } = await supabase
     .from("tournaments")
@@ -2524,23 +2524,81 @@ export async function refreshDrawSeedsInSupabase(input: { tournamentId: string; 
     (slots ?? []).map((row: any) => [row.position, { id: row.id, playerId: row.player_id }])
   );
 
-  // Current names, so we can tell resolved entrants from "Qualifier" placeholders.
+  // Current names + provider ids: tells resolved entrants from "Qualifier"
+  // placeholders, and detects a slot whose entrant ESPN has swapped out.
   const playerIds = Array.from(new Set((slots ?? []).map((row: any) => row.player_id).filter(Boolean)));
   const { data: playerRows, error: playersError } = playerIds.length
-    ? await supabase.from("players").select("id, name").in("id", playerIds)
+    ? await supabase.from("players").select("id, name, external_provider_id").in("id", playerIds)
     : { data: [], error: null };
   throwIfError(playersError);
+  const playerById = new Map<string, { name: string; externalProviderId: string | null }>(
+    (playerRows ?? []).map((row: any) => [row.id, { name: row.name, externalProviderId: row.external_provider_id ?? null }])
+  );
   const playerNameById = new Map<string, string>((playerRows ?? []).map((row: any) => [row.id, row.name]));
+  const providerIdsInDraw = new Set(
+    (playerRows ?? []).map((row: any) => row.external_provider_id).filter(Boolean).map((id: string) => normalizeEspnPlayerId(id))
+  );
+  // R1 status per match number — a replacement is only a replacement if the
+  // original never took the court.
+  const { data: r1Rows, error: r1Error } = await supabase
+    .from("matches")
+    .select("match_number, status")
+    .eq("tournament_id", input.tournamentId)
+    .eq("round_number", 1);
+  throwIfError(r1Error);
+  const r1StatusByNumber = new Map<number, string>((r1Rows ?? []).map((row: any) => [row.match_number, row.status]));
 
   const now = new Date().toISOString();
   const updates: any[] = [];
   let seedsUpdated = 0;
   let namesResolved = 0;
+  let replacementsApplied = 0;
   for (const matchup of input.draw.matchups) {
     for (const slot of [matchup.player1, matchup.player2]) {
       const drawSlot = slotByPosition.get(slot.position);
       if (!drawSlot?.playerId) continue;
       const seed = slot.seed ?? null;
+
+      // Pre-round-1 withdrawal → lucky loser / alternate. ESPN now shows a
+      // different player id in this draw line than the one we imported, and our
+      // player never played. Commissioner's standing rule: THE SLOT EARNS THE
+      // POINTS. Everyone picked that draw line under the same information (same
+      // as picking a "Qualifier" before the name is known), so the replacement
+      // inherits every pick on the withdrawn player. Rename the row in place as
+      // "New Name (Was Old Name)", carry the new provider id so results resolve
+      // automatically from here on, and tag it LL. Guards: R1 only, our match
+      // not yet completed, both ids real, and the new id isn't already someone
+      // else in the draw (ESPN has served duplicate ids before — never collapse
+      // two entrants into one row).
+      const ours = playerById.get(drawSlot.playerId);
+      const theirsId = slot.playerProviderId ? normalizeEspnPlayerId(slot.playerProviderId) : null;
+      const oursId = ours?.externalProviderId ? normalizeEspnPlayerId(ours.externalProviderId) : null;
+      if (
+        ours && theirsId && oursId && theirsId !== oursId &&
+        !isUnresolvedEntrantName(slot.playerName) && !isUnresolvedEntrantName(ours.name) &&
+        r1StatusByNumber.get(matchup.matchNumber) !== "completed" &&
+        !providerIdsInDraw.has(theirsId)
+      ) {
+        const wasMatch = ours.name.match(/^(.*?)\s+\(Was (.+)\)$/i);
+        const originalName = wasMatch ? wasMatch[2] : ours.name;
+        updates.push(
+          supabase
+            .from("players")
+            .update({
+              name: `${slot.playerName} (Was ${originalName})`,
+              country: slot.country ?? null,
+              external_provider_id: slot.playerProviderId,
+              seed,
+              designation: "LL"
+            })
+            .eq("id", drawSlot.playerId)
+        );
+        updates.push(supabase.from("draw_slots").update({ seed, resolved_at: now, updated_at: now }).eq("id", drawSlot.id));
+        providerIdsInDraw.add(theirsId);
+        replacementsApplied += 1;
+        if (seed !== null) seedsUpdated += 1;
+        continue;
+      }
       // A slot imported before its qualifier finished holds a placeholder-named
       // player. Picks point at the player ROW (its id), so writing the real name
       // onto that row retroactively resolves every pick made on "Qualifier" —
@@ -2573,7 +2631,7 @@ export async function refreshDrawSeedsInSupabase(input: { tournamentId: string; 
   }
   const results = await Promise.all(updates);
   for (const result of results) throwIfError(result.error);
-  return { seedsUpdated, namesResolved };
+  return { seedsUpdated, namesResolved, replacementsApplied };
 }
 
 /** ESPN uses "TBD" for draw slots whose entrant isn't decided yet (rain-delayed

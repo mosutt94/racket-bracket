@@ -47,9 +47,17 @@ export async function POST(request: Request) {
   // that would lock the commissioner out of ever importing the real draw, leaving
   // the Slam permanently unplayable. While the draw is still unpublished there is
   // nothing to protect, so the import stays available.
-  if ((await isTournamentPickingClosedInSupabase(tournamentId)) && (await isDrawPublishedInSupabase(tournamentId))) {
+  //
+  // Once play has begun only the DESTRUCTIVE paths freeze: the explicit clear-all,
+  // and a full import (which is what runs when no picks exist yet). The
+  // pick-preserving refresh below stays available all tournament — it's how
+  // late seeds, resolved qualifiers, and pre-R1 withdrawal replacements
+  // ("A. Gea (Was Ruud)") get into a draw people have already picked.
+  const hasPicks = await tournamentHasPicksInSupabase(tournamentId);
+  const started = (await isTournamentPickingClosedInSupabase(tournamentId)) && (await isDrawPublishedInSupabase(tournamentId));
+  if (started && (resetExistingPicks || !hasPicks)) {
     return NextResponse.json(
-      { ok: false, error: "Draw import is locked once the tournament has started." },
+      { ok: false, error: "Re-importing the draw is locked once the tournament has started." },
       { status: 403 }
     );
   }
@@ -59,11 +67,11 @@ export async function POST(request: Request) {
     const draw = await provider.getDrawImportData({ slamType, year, gender });
 
     // If picks already exist and we're not deliberately replacing the draw,
-    // don't wipe them — just pull in the latest seeds (ESPN attaches the 32
-    // seeds shortly after publishing the names). Non-destructive.
-    if (!resetExistingPicks && (await tournamentHasPicksInSupabase(tournamentId))) {
+    // don't wipe them — refresh in place: seeds, qualifier names, withdrawal
+    // replacements. Non-destructive; every pick keeps pointing at its slot.
+    if (!resetExistingPicks && hasPicks) {
       const seedResult = await refreshDrawSeedsInSupabase({ tournamentId, draw });
-      return NextResponse.json({ ok: true, mode: "seeds", seedsUpdated: seedResult.seedsUpdated, namesResolved: seedResult.namesResolved });
+      return NextResponse.json({ ok: true, mode: "seeds", seedsUpdated: seedResult.seedsUpdated, namesResolved: seedResult.namesResolved, replacementsApplied: seedResult.replacementsApplied });
     }
 
     const result = await importEspnDrawInSupabase({ tournamentId, draw, resetExistingPicks });
